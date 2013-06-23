@@ -113,7 +113,7 @@ module WiseComplete
       repo = nil
       @mutex.synchronize { repo = @repository.dup }
       repo.each do |_, tokens|
-        words = (query.length > 0) ? tokens.keys.find_all { |word| /^#{query}/i =~ word } : tokens.keys
+        words = (query.length > 0) ? tokens.keys.find_all { |word| WiseComplete.query_match?(query, word) } : tokens.keys
         words.each do |word|
           if candidates[word]
             candidates[word] += tokens[word]
@@ -151,7 +151,7 @@ module WiseComplete
       repo = nil
       @mutex.synchronize { repo = @repository.dup }
       candidates = {}
-      words = (query.length > 0) ? repo.keys.find_all { |token| /^#{query}/i =~ token } : repo.keys
+      words = (query.length > 0) ? repo.keys.find_all { |token| WiseComplete.query_match?(query, token) } : repo.keys
       words.each do |word|
         if candidates[word]
           candidates[word] += repo[word]
@@ -200,12 +200,20 @@ module WiseComplete
     end
   end
 
+  def self.query_match?(query, token)
+    if /^#{query}/i =~ token
+      true
+    else
+      /^#{query.scan(/./).join(".*?")}/i =~ token
+    end
+  end
+
   def self.find_candidates(query)
     current_text, cursor = current_buffer_text_and_position
     current_tokenizer = Tokenizer.new(current_text)
     candidates_from_current_buffer = current_tokenizer.tokens.keys
 
-    candidates_from_current_buffer = candidates_from_current_buffer.find_all { |token| /^#{query}/i =~ token } if query.length > 0
+    candidates_from_current_buffer = candidates_from_current_buffer.find_all { |token| query_match?(query, token) } if query.length > 0
 
     distances = {}
 
