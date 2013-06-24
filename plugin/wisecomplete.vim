@@ -45,12 +45,15 @@ endif
 
 augroup WiseComplete
     au!
-    au BufLeave * ruby WiseComplete.add_current_buffer
-    au VimEnter * ruby WiseComplete.add_tagfiles
-    au FileType * set completefunc=WiseComplete
+    au BufRead,BufEnter,VimEnter * call s:parse_indetifiers()
 augroup END
 
-set completefunc=WiseComplete
+fun! s:parse_indetifiers()
+  let &completefunc = 'wisecomplete#Complete'
+  let &l:completefunc = 'wisecomplete#Complete'
+  ruby WiseComplete.add_current_buffer
+  ruby WiseComplete.add_tagfiles
+endfun
 
 if !empty(g:wisecomplete_omnicompletion_trigger)
   if g:wisecomplete_omnicompletion_trigger == "<C-Space>" && !has("gui_running")
@@ -62,7 +65,7 @@ if !empty(g:wisecomplete_omnicompletion_trigger)
   silent! exe "inoremap <unique>" s:omni_trigger "<C-X><C-O><C-P>"
 endif
 
-fun! WiseComplete(findstart, base)
+fun! wisecomplete#Complete(findstart, base)
   if a:findstart
     let line = getline('.')
     let start = col('.') - 1
@@ -126,10 +129,10 @@ module WiseComplete
 
   module BufferRepository
     @repository = {}
-    @mutex = Mutex.new
+    @repository_mutex = Mutex.new
 
     def self.add(buffer_name, tokens)
-      @mutex.synchronize do
+      @repository_mutex.synchronize do
         @repository[buffer_name] = {}
         tokens.each { |token, positions| @repository[buffer_name][token] = positions.size }
       end
@@ -138,7 +141,7 @@ module WiseComplete
     def self.lookup(match_function)
       candidates = {}
       repo = nil
-      @mutex.synchronize { repo = @repository.dup }
+      @repository_mutex.synchronize { repo = @repository.dup }
       repo.each do |_, tokens|
         words = match_function ? tokens.keys.find_all { |word| match_function.call(word) } : tokens.keys
         words.each do |word|
@@ -157,13 +160,29 @@ module WiseComplete
     TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/
 
     @repository = {}
-    @mutex = Mutex.new
+    @repository_mutex = Mutex.new
+
+    @file_mtimes = {}
+    @file_mtimes_mutex = Mutex.new
 
     def self.add(tags_file)
+      @file_mtimes_mutex.synchronize do
+        if File.exists?(tags_file)
+          mtime = File.mtime(tags_file).to_i
+          if !@file_mtimes[tags_file] || @file_mtimes[tags_file] < mtime
+            @file_mtimes[tags_file] = mtime
+          else
+            return
+          end
+        else
+          return
+        end
+      end
+
       File.open(tags_file).each_line do |line|
         match = TAG_REGEX.match(line)
         if match && match[1].length >= MIN_TOKEN_SIZE
-          @mutex.synchronize do
+          @repository_mutex.synchronize do
             if @repository[match[1]]
               @repository[match[1]] += 1
             else
@@ -176,7 +195,7 @@ module WiseComplete
 
     def self.lookup(match_function)
       repo = nil
-      @mutex.synchronize { repo = @repository.dup }
+      @repository_mutex.synchronize { repo = @repository.dup }
       candidates = {}
       words = match_function ? repo.keys.find_all { |token| match_function.call(token) } : repo.keys
       words.each do |word|
