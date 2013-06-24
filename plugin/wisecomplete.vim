@@ -228,7 +228,7 @@ module WiseComplete
 
     if query.length > 0
       query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
-      query = (query =~ /[A-Z]/) ? /^#{query}/i : /^#{query}/
+      query = (query =~ /[A-Z]/) ? /^#{query}/ : /^#{query}/i
 
       match_function = Proc.new { |token| query =~ token }
       candidates_from_current_buffer = current_tokenizer.tokens.keys.find_all { |token| match_function.call(token) }
