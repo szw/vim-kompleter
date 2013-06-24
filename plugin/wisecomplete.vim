@@ -27,15 +27,36 @@ if !exists('g:wisecomplete_min_token_size')
   let g:wisecomplete_min_token_size = 3
 endif
 
+if !exists('g:wisecomplete_fuzzy_search')
+  let g:wisecomplete_fuzzy_search = 0
+endif
+
 if !exists('g:wisecomplete_max_completions')
   let g:wisecomplete_max_completions = 10
+endif
+
+if !exists('g:wisecomplete_omnicompletion_trigger')
+  let g:wisecomplete_omnicompletion_trigger = "<C-Space>"
 endif
 
 augroup WiseComplete
     au!
     au BufLeave * ruby WiseComplete.add_current_buffer
     au VimEnter * ruby WiseComplete.add_tagfiles
+    au FileType * set completefunc=WiseComplete
 augroup END
+
+set completefunc=WiseComplete
+
+if !empty(g:wisecomplete_omnicompletion_trigger)
+  if g:wisecomplete_omnicompletion_trigger == "<C-Space>" && !has("gui_running")
+    let s:omni_trigger = "<Nul>"
+  else
+    let s:omni_trigger = g:wisecomplete_omnicompletion_trigger
+  endif
+
+  silent! exe "inoremap <unique>" s:omni_trigger "<C-X><C-O><C-P>"
+endif
 
 fun! WiseComplete(findstart, base)
   if a:findstart
@@ -46,7 +67,7 @@ fun! WiseComplete(findstart, base)
     endwhile
     return start
   else
-    ruby VIM::command("return #{WiseComplete.find_candidates(VIM::evaluate("a:base")).inspect}")
+    ruby VIM::command("return [#{WiseComplete.find_candidates(VIM::evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
   endif
 endfun
 
@@ -55,6 +76,7 @@ require "thread"
 
 module WiseComplete
   MIN_TOKEN_SIZE = VIM::evaluate("g:wisecomplete_min_token_size")
+  FUZZY_SEARCH = VIM::evaluate("g:wisecomplete_fuzzy_search")
   MAX_COMPLETIONS = VIM::evaluate("g:wisecomplete_max_completions")
 
   class Tokenizer
@@ -108,12 +130,12 @@ module WiseComplete
       end
     end
 
-    def self.lookup(query)
+    def self.lookup(match_function)
       candidates = {}
       repo = nil
       @mutex.synchronize { repo = @repository.dup }
       repo.each do |_, tokens|
-        words = (query.length > 0) ? tokens.keys.find_all { |word| WiseComplete.query_match?(query, word) } : tokens.keys
+        words = match_function ? tokens.keys.find_all { |word| match_function.call(word) } : tokens.keys
         words.each do |word|
           if candidates[word]
             candidates[word] += tokens[word]
@@ -147,11 +169,11 @@ module WiseComplete
       end
     end
 
-    def self.lookup(query)
+    def self.lookup(match_function)
       repo = nil
       @mutex.synchronize { repo = @repository.dup }
       candidates = {}
-      words = (query.length > 0) ? repo.keys.find_all { |token| WiseComplete.query_match?(query, token) } : repo.keys
+      words = match_function ? repo.keys.find_all { |token| match_function.call(token) } : repo.keys
       words.each do |word|
         if candidates[word]
           candidates[word] += repo[word]
@@ -200,20 +222,25 @@ module WiseComplete
     end
   end
 
-  def self.query_match?(query, token)
-    if /^#{query}/i =~ token
-      true
-    else
-      /^#{query.scan(/./).join(".*?")}/i =~ token
-    end
-  end
-
   def self.find_candidates(query)
     current_text, cursor = current_buffer_text_and_position
     current_tokenizer = Tokenizer.new(current_text)
-    candidates_from_current_buffer = current_tokenizer.tokens.keys
 
-    candidates_from_current_buffer = candidates_from_current_buffer.find_all { |token| query_match?(query, token) } if query.length > 0
+    if query.length > 0
+      ignorecase = (query =~ /[A-Z]/).nil?
+
+      if FUZZY_SEARCH > 0
+        query_regex = ignorecase ? /^#{query.scan(/./).join(".*?")}/i : /^#{query.scan(/./).join(".*?")}/
+      else
+        query_regex = ignorecase ? /^#{query}/i : /^#{query}/
+      end
+
+      match_function = Proc.new { |token| query_regex =~ token }
+      candidates_from_current_buffer = current_tokenizer.tokens.keys.find_all { |token| match_function.call(token) }
+    else
+      match_function = nil
+      candidates_from_current_buffer = current_tokenizer.tokens.keys
+    end
 
     distances = {}
 
@@ -229,12 +256,12 @@ module WiseComplete
     if candidates.count >= MAX_COMPLETIONS
       return candidates[0, MAX_COMPLETIONS]
     else
-      BufferRepository.lookup(query).each do |buffer_candidate|
+      BufferRepository.lookup(match_function).each do |buffer_candidate|
         candidates << buffer_candidate unless candidates.include?(buffer_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
 
-      TagsRepository.lookup(query).each do |tags_candidate|
+      TagsRepository.lookup(match_function).each do |tags_candidate|
         candidates << tags_candidate unless candidates.include?(tags_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
