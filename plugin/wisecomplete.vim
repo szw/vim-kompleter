@@ -227,15 +227,10 @@ module WiseComplete
     current_tokenizer = Tokenizer.new(current_text)
 
     if query.length > 0
-      ignorecase = (query =~ /[A-Z]/).nil?
+      query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
+      query = (query =~ /[A-Z]/) ? /^#{query}/i : /^#{query}/
 
-      if FUZZY_SEARCH > 0
-        query_regex = ignorecase ? /^#{query.scan(/./).join(".*?")}/i : /^#{query.scan(/./).join(".*?")}/
-      else
-        query_regex = ignorecase ? /^#{query}/i : /^#{query}/
-      end
-
-      match_function = Proc.new { |token| query_regex =~ token }
+      match_function = Proc.new { |token| query =~ token }
       candidates_from_current_buffer = current_tokenizer.tokens.keys.find_all { |token| match_function.call(token) }
     else
       match_function = nil
