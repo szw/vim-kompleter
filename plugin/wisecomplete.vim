@@ -39,10 +39,6 @@ if !exists('g:wisecomplete_max_completions')
   let g:wisecomplete_max_completions = 10
 endif
 
-if !exists('g:wisecomplete_omnicompletion_trigger')
-  let g:wisecomplete_omnicompletion_trigger = "<C-Space>"
-endif
-
 augroup WiseComplete
     au!
     au BufRead,BufEnter,VimEnter * call s:parse_indetifiers()
@@ -54,16 +50,6 @@ fun! s:parse_indetifiers()
   ruby WiseComplete.add_current_buffer
   ruby WiseComplete.add_tagfiles
 endfun
-
-if !empty(g:wisecomplete_omnicompletion_trigger)
-  if g:wisecomplete_omnicompletion_trigger == "<C-Space>" && !has("gui_running")
-    let s:omni_trigger = "<Nul>"
-  else
-    let s:omni_trigger = g:wisecomplete_omnicompletion_trigger
-  endif
-
-  silent! exe "inoremap <unique>" s:omni_trigger "<C-X><C-O><C-P>"
-endif
 
 fun! wisecomplete#Complete(findstart, base)
   if a:findstart
@@ -138,12 +124,12 @@ module WiseComplete
       end
     end
 
-    def self.lookup(match_function)
+    def self.lookup(matcher)
       candidates = {}
       repo = nil
       @repository_mutex.synchronize { repo = @repository.dup }
       repo.each do |_, tokens|
-        words = match_function ? tokens.keys.find_all { |word| match_function.call(word) } : tokens.keys
+        words = matcher ? tokens.keys.find_all { |word| matcher.call(word) } : tokens.keys
         words.each do |word|
           if candidates[word]
             candidates[word] += tokens[word]
@@ -193,11 +179,11 @@ module WiseComplete
       end
     end
 
-    def self.lookup(match_function)
+    def self.lookup(matcher)
       repo = nil
       @repository_mutex.synchronize { repo = @repository.dup }
       candidates = {}
-      words = match_function ? repo.keys.find_all { |token| match_function.call(token) } : repo.keys
+      words = matcher ? repo.keys.find_all { |token| matcher.call(token) } : repo.keys
       words.each do |word|
         if candidates[word]
           candidates[word] += repo[word]
@@ -255,10 +241,10 @@ module WiseComplete
       query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
       query = case_sensitive ? /^#{query}/ : /^#{query}/i
 
-      match_function = Proc.new { |token| query =~ token }
-      candidates_from_current_buffer = current_tokenizer.tokens.keys.find_all { |token| match_function.call(token) }
+      matcher = Proc.new { |token| query =~ token }
+      candidates_from_current_buffer = current_tokenizer.tokens.keys.find_all { |token| matcher.call(token) }
     else
-      match_function = nil
+      matcher = nil
       candidates_from_current_buffer = current_tokenizer.tokens.keys
     end
 
@@ -276,12 +262,12 @@ module WiseComplete
     if candidates.count >= MAX_COMPLETIONS
       return candidates[0, MAX_COMPLETIONS]
     else
-      BufferRepository.lookup(match_function).each do |buffer_candidate|
+      BufferRepository.lookup(matcher).each do |buffer_candidate|
         candidates << buffer_candidate unless candidates.include?(buffer_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
 
-      TagsRepository.lookup(match_function).each do |tags_candidate|
+      TagsRepository.lookup(matcher).each do |tags_candidate|
         candidates << tags_candidate unless candidates.include?(tags_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
