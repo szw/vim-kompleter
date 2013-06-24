@@ -31,6 +31,10 @@ if !exists('g:wisecomplete_fuzzy_search')
   let g:wisecomplete_fuzzy_search = 0
 endif
 
+if !exists('g:wisecomplete_case_sensitive')
+  let g:wisecomplete_case_sensitive = 2
+endif
+
 if !exists('g:wisecomplete_max_completions')
   let g:wisecomplete_max_completions = 10
 endif
@@ -62,7 +66,7 @@ fun! WiseComplete(findstart, base)
   if a:findstart
     let line = getline('.')
     let start = col('.') - 1
-    while start > 0 && line[start - 1] =~ '\a'
+    while start > 0 && line[start - 1] =~ '[_a-zA-Z]'
       let start -= 1
     endwhile
     return start
@@ -78,6 +82,7 @@ module WiseComplete
   MIN_TOKEN_SIZE = VIM::evaluate("g:wisecomplete_min_token_size")
   FUZZY_SEARCH = VIM::evaluate("g:wisecomplete_fuzzy_search")
   MAX_COMPLETIONS = VIM::evaluate("g:wisecomplete_max_completions")
+  CASE_SENSITIVE = VIM::evaluate("g:wisecomplete_case_sensitive")
 
   class Tokenizer
     TOKEN_REGEX = /[_a-zA-Z]\w*/
@@ -227,8 +232,9 @@ module WiseComplete
     current_tokenizer = Tokenizer.new(current_text)
 
     if query.length > 0
+      case_sensitive = (CASE_SENSITIVE == 2) ? (query =~ /[A-Z]/) : (CASE_SENSITIVE > 0)
       query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
-      query = (query =~ /[A-Z]/) ? /^#{query}/ : /^#{query}/i
+      query = case_sensitive ? /^#{query}/ : /^#{query}/i
 
       match_function = Proc.new { |token| query =~ token }
       candidates_from_current_buffer = current_tokenizer.tokens.keys.find_all { |token| match_function.call(token) }
