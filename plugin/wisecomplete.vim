@@ -74,7 +74,7 @@ fun! wisecomplete#Complete(findstart, base)
     endwhile
     return start
   else
-    ruby VIM::command("return [#{WiseComplete.find_candidates(VIM::evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
+    ruby VIM::command("return [#{WiseComplete.complete(VIM::evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
   endif
 endfun
 
@@ -246,7 +246,7 @@ module WiseComplete
     end
   end
 
-  def self.find_candidates(query)
+  def self.complete(query)
     current_text, cursor = current_buffer_text_and_position
     current_tokenizer = Tokenizer.new(current_text)
 
