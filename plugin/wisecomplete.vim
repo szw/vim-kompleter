@@ -1,6 +1,6 @@
 " vim-wisecomplete - Smart idenfifier completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.0.1
+" Version:      0.0.2
 "
 " Installation:
 " Place in ~/.vim/plugin/wisecomplete.vim or in case of Pathogen:
