@@ -1,12 +1,16 @@
-" vim-wisecomplete - Smart idenfifier completion for Vim
+" vim-kompleter - Smart idenfifier completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.0.2
+" Version:      0.0.3
 "
 " Installation:
-" Place in ~/.vim/plugin/wisecomplete.vim or in case of Pathogen:
+" Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
 "
 "     cd ~/.vim/bundle
-"     git clone https://github.com/szw/vim-wisecomplete.git
+"     git clone https://github.com/szw/vim-kompleter.git
+"
+" In case of Vundle:
+"
+"     Bundle "szw/vim-kompleter"
 "
 " License:
 " Copyright (c) 2013 Szymon Wrozynski and Contributors.
@@ -14,44 +18,44 @@
 " See :help license
 "
 " Usage:
-" help :wisecomplete
-" https://github.com/szw/vim-wisecomplete/blob/master/README.md
+" help :kompleter
+" https://github.com/szw/vim-kompleter/blob/master/README.md
 
-if exists("g:loaded_wisecomplete") || &cp || v:version < 700 || !has("ruby")
+if exists("g:loaded_kompleter") || &cp || v:version < 700 || !has("ruby")
     finish
 endif
 
-let g:loaded_wisecomplete = 1
+let g:loaded_kompleter = 1
 
-if !exists('g:wisecomplete_min_token_size')
-  let g:wisecomplete_min_token_size = 3
+if !exists('g:kompleter_min_token_size')
+  let g:kompleter_min_token_size = 3
 endif
 
-if !exists('g:wisecomplete_fuzzy_search')
-  let g:wisecomplete_fuzzy_search = 0
+if !exists('g:kompleter_fuzzy_search')
+  let g:kompleter_fuzzy_search = 0
 endif
 
-if !exists('g:wisecomplete_case_sensitive')
-  let g:wisecomplete_case_sensitive = 2
+if !exists('g:kompleter_case_sensitive')
+  let g:kompleter_case_sensitive = 2
 endif
 
-if !exists('g:wisecomplete_max_completions')
-  let g:wisecomplete_max_completions = 10
+if !exists('g:kompleter_max_completions')
+  let g:kompleter_max_completions = 10
 endif
 
-augroup WiseComplete
+augroup Kompleter
     au!
     au BufRead,BufEnter,VimEnter * call s:parse_indetifiers()
 augroup END
 
 fun! s:parse_indetifiers()
-  let &completefunc = 'wisecomplete#Complete'
-  let &l:completefunc = 'wisecomplete#Complete'
-  ruby WiseComplete.add_current_buffer
-  ruby WiseComplete.add_tagfiles
+  let &completefunc = 'kompleter#Complete'
+  let &l:completefunc = 'kompleter#Complete'
+  ruby Kompleter.add_current_buffer
+  ruby Kompleter.add_tagfiles
 endfun
 
-fun! wisecomplete#Complete(findstart, base)
+fun! kompleter#Complete(findstart, base)
   if a:findstart
     let line = getline('.')
     let start = col('.') - 1
@@ -60,18 +64,18 @@ fun! wisecomplete#Complete(findstart, base)
     endwhile
     return start
   else
-    ruby VIM::command("return [#{WiseComplete.complete(VIM::evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
+    ruby VIM::command("return [#{Kompleter.complete(VIM::evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
   endif
 endfun
 
 ruby << EOF
 require "thread"
 
-module WiseComplete
-  MIN_TOKEN_SIZE = VIM::evaluate("g:wisecomplete_min_token_size")
-  FUZZY_SEARCH = VIM::evaluate("g:wisecomplete_fuzzy_search")
-  MAX_COMPLETIONS = VIM::evaluate("g:wisecomplete_max_completions")
-  CASE_SENSITIVE = VIM::evaluate("g:wisecomplete_case_sensitive")
+module Kompleter
+  MIN_TOKEN_SIZE = VIM::evaluate("g:kompleter_min_token_size")
+  FUZZY_SEARCH = VIM::evaluate("g:kompleter_fuzzy_search")
+  MAX_COMPLETIONS = VIM::evaluate("g:kompleter_max_completions")
+  CASE_SENSITIVE = VIM::evaluate("g:kompleter_case_sensitive")
 
   class Tokenizer
     TOKEN_REGEX = /[_a-zA-Z]\w*/

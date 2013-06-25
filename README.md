@@ -1,4 +1,4 @@
-vim-wisecomplete
-================
+vim-kompleter
+=============
 
-A smart indentifier completion for Vim
+A smart keyword completion plugin for Vim.
