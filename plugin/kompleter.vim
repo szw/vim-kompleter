@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.0.3
+" Version:      0.0.4
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -239,6 +239,8 @@ module Kompleter
   def self.complete(query)
     current_text, cursor = current_buffer_text_and_position
     tokenizer = Tokenizer.new(current_text)
+
+    query = query.to_s # it could be a Fixnum if user is trying to complete a number, e.g. 10<C-x><C-u>
 
     if query.length > 0
       case_sensitive = (CASE_SENSITIVE == 2) ? (query =~ /[A-Z]/) : (CASE_SENSITIVE > 0)
