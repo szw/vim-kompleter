@@ -1,4 +1,4 @@
-" vim-kompleter - Smart idenfifier completion for Vim
+" vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
 " Version:      0.0.3
 "
@@ -45,14 +45,14 @@ endif
 
 augroup Kompleter
     au!
-    au BufRead,BufEnter,VimEnter * call s:parse_indetifiers()
+    au BufRead,BufEnter,VimEnter * call s:parse_keywords()
 augroup END
 
-fun! s:parse_indetifiers()
+fun! s:parse_keywords()
   let &completefunc = 'kompleter#Complete'
   let &l:completefunc = 'kompleter#Complete'
-  ruby Kompleter.add_current_buffer
-  ruby Kompleter.add_tagfiles
+  ruby Kompleter.parse_current_buffer
+  ruby Kompleter.parse_tagfiles
 endfun
 
 fun! kompleter#Complete(findstart, base)
@@ -224,12 +224,12 @@ module Kompleter
     [text, cursor_in_text]
   end
 
-  def self.add_current_buffer
+  def self.parse_current_buffer
     text, _ = current_buffer_text_and_position
     Thread.new { BufferRepository.add(current_buffer_name, Tokenizer.new(text).tokens) }
   end
 
-  def self.add_tagfiles
+  def self.parse_tagfiles
     tag_files = VIM.evaluate("tagfiles()")
     tag_files.each do |file|
       Thread.new { TagsRepository.add(file) }
@@ -238,7 +238,7 @@ module Kompleter
 
   def self.complete(query)
     current_text, cursor = current_buffer_text_and_position
-    current_tokenizer = Tokenizer.new(current_text)
+    tokenizer = Tokenizer.new(current_text)
 
     if query.length > 0
       case_sensitive = (CASE_SENSITIVE == 2) ? (query =~ /[A-Z]/) : (CASE_SENSITIVE > 0)
@@ -246,17 +246,17 @@ module Kompleter
       query = case_sensitive ? /^#{query}/ : /^#{query}/i
 
       matcher = Proc.new { |token| query =~ token }
-      candidates_from_current_buffer = current_tokenizer.tokens.keys.find_all { |token| matcher.call(token) }
+      candidates_from_current_buffer = tokenizer.tokens.keys.find_all { |token| matcher.call(token) }
     else
       matcher = nil
-      candidates_from_current_buffer = current_tokenizer.tokens.keys
+      candidates_from_current_buffer = tokenizer.tokens.keys
     end
 
     distances = {}
 
     candidates_from_current_buffer.each do |candidate|
-      distance = current_tokenizer.tokens[candidate].map { |pos| (cursor - pos).abs }.min
-      count_factor = current_tokenizer.tokens[candidate].count / current_tokenizer.count.to_f
+      distance = tokenizer.tokens[candidate].map { |pos| (cursor - pos).abs }.min
+      count_factor = tokenizer.tokens[candidate].count / tokenizer.count.to_f
       distance -= distance * count_factor
       distances[candidate] = distance
     end
