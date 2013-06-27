@@ -45,7 +45,7 @@ endif
 
 augroup Kompleter
     au!
-    au BufRead,BufEnter,VimEnter * call s:parse_keywords()
+    au BufWritePre,BufRead,BufEnter,VimEnter * call s:parse_keywords()
 augroup END
 
 fun! s:parse_keywords()
