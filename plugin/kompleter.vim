@@ -123,7 +123,7 @@ module Kompleter
 
     def self.add(buffer)
       text = ""
-      (1...buffer.count).each { |n| text << buffer[n] + "\n" }
+      (1...buffer.count).each { |n| text << "#{buffer[n]}\n" }
 
       tokens = Tokenizer.new(text).tokens
 
@@ -213,7 +213,7 @@ module Kompleter
   end
 
   def self.parse_buffer
-    buffer = VIM::Buffer.current
+    buffer = VIM::Buffer.current.dup
     Thread.new { BufferRepository.add(buffer) }
   end
 
@@ -233,7 +233,7 @@ module Kompleter
 
     (1...buffer.count).each do |n|
       line = buffer[n]
-      text << line + "\n"
+      text << "#{line}\n"
 
       if row > n
         cursor += line.length + 1
