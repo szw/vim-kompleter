@@ -51,7 +51,7 @@ augroup END
 fun! s:parse_keywords()
   let &completefunc = 'kompleter#Complete'
   let &l:completefunc = 'kompleter#Complete'
-  ruby Kompleter.parse_current_buffer
+  ruby Kompleter.parse_buffer
   ruby Kompleter.parse_tagfiles
 endfun
 
@@ -64,7 +64,7 @@ fun! kompleter#Complete(findstart, base)
     endwhile
     return start
   else
-    ruby VIM::command("return [#{Kompleter.complete(VIM::evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
+    ruby VIM.command("return [#{Kompleter.complete(VIM.evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
   endif
 endfun
 
@@ -72,10 +72,10 @@ ruby << EOF
 require "thread"
 
 module Kompleter
-  MIN_TOKEN_SIZE = VIM::evaluate("g:kompleter_min_token_size")
-  FUZZY_SEARCH = VIM::evaluate("g:kompleter_fuzzy_search")
-  MAX_COMPLETIONS = VIM::evaluate("g:kompleter_max_completions")
-  CASE_SENSITIVE = VIM::evaluate("g:kompleter_case_sensitive")
+  MIN_TOKEN_SIZE = VIM.evaluate("g:kompleter_min_token_size")
+  FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
+  MAX_COMPLETIONS = VIM.evaluate("g:kompleter_max_completions")
+  CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
 
   class Tokenizer
     TOKEN_REGEX = /[_a-zA-Z]\w*/
@@ -121,10 +121,23 @@ module Kompleter
     @repository = {}
     @repository_mutex = Mutex.new
 
-    def self.add(buffer_name, tokens)
+    def self.add(buffer)
+      text = ""
+      (1...buffer.count).each { |n| text << buffer[n] + "\n" }
+
+      tokens = Tokenizer.new(text).tokens
+
       @repository_mutex.synchronize do
-        @repository[buffer_name] = {}
-        tokens.each { |token, positions| @repository[buffer_name][token] = positions.size }
+        key = if buffer.name
+          @repository[buffer.number] = {}
+          buffer.name
+        else
+          buffer.number
+        end
+
+        @repository[key] = {}
+
+        tokens.each { |token, positions| @repository[key][token] = positions.size }
       end
     end
 
@@ -199,34 +212,9 @@ module Kompleter
     end
   end
 
-  def self.current_buffer_name
-    VIM::Buffer.current.name
-  end
-
-  def self.current_buffer_text_and_position
+  def self.parse_buffer
     buffer = VIM::Buffer.current
-
-    row, col = VIM::Window.current.cursor
-    cursor_in_text = 0
-    text = ""
-
-    (1...buffer.count).each do |n|
-      line = buffer[n]
-      text << line + "\n"
-
-      if row > n
-        cursor_in_text += line.length + 1
-      elsif row == n
-        cursor_in_text += col
-      end
-    end
-
-    [text, cursor_in_text]
-  end
-
-  def self.parse_current_buffer
-    text, _ = current_buffer_text_and_position
-    Thread.new { BufferRepository.add(current_buffer_name, Tokenizer.new(text).tokens) }
+    Thread.new { BufferRepository.add(buffer) }
   end
 
   def self.parse_tagfiles
@@ -237,8 +225,24 @@ module Kompleter
   end
 
   def self.complete(query)
-    current_text, cursor = current_buffer_text_and_position
-    tokenizer = Tokenizer.new(current_text)
+    buffer = VIM::Buffer.current
+
+    row, col = VIM::Window.current.cursor
+    cursor = 0
+    text = ""
+
+    (1...buffer.count).each do |n|
+      line = buffer[n]
+      text << line + "\n"
+
+      if row > n
+        cursor += line.length + 1
+      elsif row == n
+        cursor += col
+      end
+    end
+
+    tokenizer = Tokenizer.new(text)
 
     query = query.to_s # it could be a Fixnum if user is trying to complete a number, e.g. 10<C-x><C-u>
 
