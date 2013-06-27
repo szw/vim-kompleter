@@ -121,23 +121,18 @@ module Kompleter
     @repository = {}
     @repository_mutex = Mutex.new
 
-    def self.add(buffer)
-      text = ""
-      (1...buffer.count).each { |n| text << "#{buffer[n]}\n" }
-
-      tokens = Tokenizer.new(text).tokens
-
+    def self.add(number, name, text)
       @repository_mutex.synchronize do
-        key = if buffer.name
-          @repository[buffer.number] = {}
-          buffer.name
+        key = if name
+          @repository[number] = {}
+          name
         else
-          buffer.number
+          number
         end
 
         @repository[key] = {}
 
-        tokens.each { |token, positions| @repository[key][token] = positions.size }
+        Tokenizer.new(text).tokens.each { |token, positions| @repository[key][token] = positions.size }
       end
     end
 
@@ -213,8 +208,14 @@ module Kompleter
   end
 
   def self.parse_buffer
-    buffer = VIM::Buffer.current.dup
-    Thread.new { BufferRepository.add(buffer) }
+    buffer = VIM::Buffer.current
+    number = buffer.number
+    name = buffer.name
+    text = ""
+
+    (1...buffer.count).each { |n| text << "#{buffer[n]}\n" }
+
+    Thread.new { BufferRepository.add(number, name, text) }
   end
 
   def self.parse_tagfiles
@@ -232,11 +233,11 @@ module Kompleter
     text = ""
 
     (1...buffer.count).each do |n|
-      line = buffer[n]
-      text << "#{line}\n"
+      line = "#{buffer[n]}\n"
+      text << line
 
       if row > n
-        cursor += line.length + 1
+        cursor += line.length
       elsif row == n
         cursor += col
       end
