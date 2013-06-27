@@ -213,7 +213,7 @@ module Kompleter
     name = buffer.name
     text = ""
 
-    (1...buffer.count).each { |n| text << "#{buffer[n]}\n" }
+    (1..buffer.count).each { |n| text << "#{buffer[n]}\n" }
 
     Thread.new { BufferRepository.add(number, name, text) }
   end
@@ -232,7 +232,7 @@ module Kompleter
     cursor = 0
     text = ""
 
-    (1...buffer.count).each do |n|
+    (1..buffer.count).each do |n|
       line = "#{buffer[n]}\n"
       text << line
 
