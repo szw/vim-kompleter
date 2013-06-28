@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.0.6
+" Version:      0.0.7
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -27,24 +27,15 @@ endif
 
 let g:loaded_kompleter = 1
 
-if !exists('g:kompleter_min_keyword_size')
-  let g:kompleter_min_keyword_size = 3
-endif
-
 if !exists('g:kompleter_fuzzy_search')
   let g:kompleter_fuzzy_search = 0
 endif
 
+" 0 - case insensitive
+" 1 - case sensitive
+" 2 - smart case sensitive (see :help 'smartcase')
 if !exists('g:kompleter_case_sensitive')
-  let g:kompleter_case_sensitive = 2
-endif
-
-if !exists('g:kompleter_max_completions')
-  let g:kompleter_max_completions = 10
-endif
-
-if !exists('g:kompleter_distance_range')
-  let g:kompleter_distance_range = 5000
+  let g:kompleter_case_sensitive = 1
 endif
 
 augroup Kompleter
@@ -76,13 +67,15 @@ ruby << EOF
 require "thread"
 
 module Kompleter
-  MIN_KEYWORD_SIZE = VIM.evaluate("g:kompleter_min_keyword_size")
-  FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
-  MAX_COMPLETIONS = VIM.evaluate("g:kompleter_max_completions")
-  CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
-  DISTANCE_RANGE = VIM.evaluate("g:kompleter_distance_range")
+  MIN_KEYWORD_SIZE = 3
+  MAX_COMPLETIONS = 10
+  DISTANCE_RANGE = 5000
+
   TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/
   KEYWORD_REGEX = /[_a-zA-Z]\w*/
+
+  FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
+  CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
 
   class Repository
     attr_reader :repository, :repository_mutex
