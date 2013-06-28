@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.0.4
+" Version:      0.0.6
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -27,8 +27,8 @@ endif
 
 let g:loaded_kompleter = 1
 
-if !exists('g:kompleter_min_token_size')
-  let g:kompleter_min_token_size = 3
+if !exists('g:kompleter_min_keyword_size')
+  let g:kompleter_min_keyword_size = 3
 endif
 
 if !exists('g:kompleter_fuzzy_search')
@@ -41,6 +41,10 @@ endif
 
 if !exists('g:kompleter_max_completions')
   let g:kompleter_max_completions = 10
+endif
+
+if !exists('g:kompleter_distance_range')
+  let g:kompleter_distance_range = 5000
 endif
 
 augroup Kompleter
@@ -72,103 +76,71 @@ ruby << EOF
 require "thread"
 
 module Kompleter
-  MIN_TOKEN_SIZE = VIM.evaluate("g:kompleter_min_token_size")
+  MIN_KEYWORD_SIZE = VIM.evaluate("g:kompleter_min_keyword_size")
   FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
   MAX_COMPLETIONS = VIM.evaluate("g:kompleter_max_completions")
   CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
+  DISTANCE_RANGE = VIM.evaluate("g:kompleter_distance_range")
+  TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/
+  KEYWORD_REGEX = /[_a-zA-Z]\w*/
 
-  class Tokenizer
-    TOKEN_REGEX = /[_a-zA-Z]\w*/
+  class Repository
+    attr_reader :repository, :repository_mutex
 
-    attr_reader :text
-
-    def initialize(text)
-      @text = text
-      @count = 0
+    def initialize
+      @repository = {}
+      @repository_mutex = Mutex.new
     end
 
-    def tokens
-      @tokens ||= parse_tokens
-    end
+    def lookup(matcher)
+      return [] unless repository_mutex.try_lock
+      repo = repository.dup
+      repository_mutex.unlock
 
-    def count
-      tokens
-      @count
-    end
+      candidates = Hash.new(0)
 
-    private
-
-    def parse_tokens
-      tokens = {}
-
-      text.to_enum(:scan, TOKEN_REGEX).each do |m|
-        if m.length >= MIN_TOKEN_SIZE
-          if tokens[m]
-            tokens[m] << $`.size
-          else
-            tokens[m] = [$`.size]
-          end
-
-          @count += 1
-        end
+      repo.values.each do |keywords|
+        words = matcher ? keywords.keys.find_all { |word| matcher.call(word) } : keywords.keys
+        words.each { |word| candidates[word] += keywords[word] }
       end
 
-      tokens
+      candidates.keys.sort { |a, b| candidates[b] <=> candidates[a] }
     end
   end
 
-  module BufferRepository
-    @repository = {}
-    @repository_mutex = Mutex.new
+  class BufferRepository < Repository
+    def add(number, name, text)
+      keywords = Hash.new(0)
+      text.scan(KEYWORD_REGEX).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
 
-    def self.add(number, name, text)
-      @repository_mutex.synchronize do
+      repository_mutex.synchronize do
         key = if name
-          @repository[number] = {}
+          repository[number] = {}
           name
         else
           number
         end
 
-        @repository[key] = {}
-
-        Tokenizer.new(text).tokens.each { |token, positions| @repository[key][token] = positions.size }
+        repository[key] = keywords
       end
-    end
-
-    def self.lookup(matcher)
-      candidates = {}
-      repo = nil
-      @repository_mutex.synchronize { repo = @repository.dup }
-      repo.each do |_, tokens|
-        words = matcher ? tokens.keys.find_all { |word| matcher.call(word) } : tokens.keys
-        words.each do |word|
-          if candidates[word]
-            candidates[word] += tokens[word]
-          else
-            candidates[word] = tokens[word]
-          end
-        end
-      end
-      candidates.keys.sort { |a, b| candidates[b] <=> candidates[a] }
     end
   end
 
-  module TagsRepository
-    TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/
+  class TagsRepository < Repository
+    attr_reader :file_mtimes, :file_mtimes_mutex
 
-    @repository = {}
-    @repository_mutex = Mutex.new
+    def initialize
+      super
+      @file_mtimes = {}
+      @file_mtimes_mutex = Mutex.new
+    end
 
-    @file_mtimes = {}
-    @file_mtimes_mutex = Mutex.new
-
-    def self.add(tags_file)
-      @file_mtimes_mutex.synchronize do
+    def add(tags_file)
+      file_mtimes_mutex.synchronize do
         if File.exists?(tags_file)
           mtime = File.mtime(tags_file).to_i
-          if !@file_mtimes[tags_file] || @file_mtimes[tags_file] < mtime
-            @file_mtimes[tags_file] = mtime
+          if !file_mtimes[tags_file] || file_mtimes[tags_file] < mtime
+            file_mtimes[tags_file] = mtime
           else
             return
           end
@@ -177,58 +149,40 @@ module Kompleter
         end
       end
 
+      keywords = Hash.new(0)
+
       File.open(tags_file).each_line do |line|
         match = TAG_REGEX.match(line)
-        if match && match[1].length >= MIN_TOKEN_SIZE
-          @repository_mutex.synchronize do
-            if @repository[match[1]]
-              @repository[match[1]] += 1
-            else
-              @repository[match[1]] = 1
-            end
-          end
-        end
+        keywords[match[1]] += 1 if match && match[1].length >= MIN_KEYWORD_SIZE
       end
-    end
 
-    def self.lookup(matcher)
-      repo = nil
-      @repository_mutex.synchronize { repo = @repository.dup }
-      candidates = {}
-      words = matcher ? repo.keys.find_all { |token| matcher.call(token) } : repo.keys
-      words.each do |word|
-        if candidates[word]
-          candidates[word] += repo[word]
-        else
-          candidates[word] = repo[word]
-        end
-      end
-      candidates.keys.sort { |a, b| candidates[b] <=> candidates[a] }
+      repository_mutex.synchronize { repository[tags_file] = keywords }
     end
   end
 
+  TAGS_REPOSITORY = TagsRepository.new
+  BUFFER_REPOSITORY = BufferRepository.new
+
   def self.parse_buffer
     buffer = VIM::Buffer.current
-    number = buffer.number
-    name = buffer.name
-    text = ""
+    buffer_text = ""
 
-    (1..buffer.count).each { |n| text << "#{buffer[n]}\n" }
+    (1..buffer.count).each { |n| buffer_text << "#{buffer[n]}\n" }
 
-    Thread.new { BufferRepository.add(number, name, text) }
+    Thread.new(buffer.number, buffer.name, buffer_text) { |number, name, text| BUFFER_REPOSITORY.add(number, name, text) }
   end
 
   def self.parse_tagfiles
     tag_files = VIM.evaluate("tagfiles()")
     tag_files.each do |file|
-      Thread.new { TagsRepository.add(file) }
+      Thread.new(file) { |f| TAGS_REPOSITORY.add(f) }
     end
   end
 
   def self.complete(query)
     buffer = VIM::Buffer.current
 
-    row, col = VIM::Window.current.cursor
+    row, column = VIM::Window.current.cursor
     cursor = 0
     text = ""
 
@@ -239,11 +193,33 @@ module Kompleter
       if row > n
         cursor += line.length
       elsif row == n
-        cursor += col
+        cursor += column
       end
     end
 
-    tokenizer = Tokenizer.new(text)
+    if cursor > DISTANCE_RANGE
+      text = text[(cursor - DISTANCE_RANGE)..-1]
+      cursor = DISTANCE_RANGE
+    end
+
+    if text.length > (cursor + DISTANCE_RANGE)
+      text = text[0, cursor + DISTANCE_RANGE]
+    end
+
+    keywords = {}
+    count = 0
+
+    text.to_enum(:scan, KEYWORD_REGEX).each do |m|
+      if m.length >= MIN_KEYWORD_SIZE
+        if keywords[m]
+          keywords[m] << $`.size
+        else
+          keywords[m] = [$`.size]
+        end
+
+        count += 1
+      end
+    end
 
     query = query.to_s # it could be a Fixnum if user is trying to complete a number, e.g. 10<C-x><C-u>
 
@@ -252,19 +228,18 @@ module Kompleter
       query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
       query = case_sensitive ? /^#{query}/ : /^#{query}/i
 
-      matcher = Proc.new { |token| query =~ token }
-      candidates_from_current_buffer = tokenizer.tokens.keys.find_all { |token| matcher.call(token) }
+      matcher = Proc.new { |keyword| query =~ keyword }
+      candidates_from_current_buffer = keywords.keys.find_all { |keyword| matcher.call(keyword) }
     else
       matcher = nil
-      candidates_from_current_buffer = tokenizer.tokens.keys
+      candidates_from_current_buffer = keywords.keys
     end
 
     distances = {}
 
     candidates_from_current_buffer.each do |candidate|
-      distance = tokenizer.tokens[candidate].map { |pos| (cursor - pos).abs }.min
-      count_factor = tokenizer.tokens[candidate].count / tokenizer.count.to_f
-      distance -= distance * count_factor
+      distance = keywords[candidate].map { |pos| (cursor - pos).abs }.min
+      distance -= distance * (keywords[candidate].count / count.to_f)
       distances[candidate] = distance
     end
 
@@ -273,12 +248,12 @@ module Kompleter
     if candidates.count >= MAX_COMPLETIONS
       return candidates[0, MAX_COMPLETIONS]
     else
-      BufferRepository.lookup(matcher).each do |buffer_candidate|
+      BUFFER_REPOSITORY.lookup(matcher).each do |buffer_candidate|
         candidates << buffer_candidate unless candidates.include?(buffer_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
 
-      TagsRepository.lookup(matcher).each do |tags_candidate|
+      TAGS_REPOSITORY.lookup(matcher).each do |tags_candidate|
         candidates << tags_candidate unless candidates.include?(tags_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
