@@ -98,6 +98,7 @@ module Kompleter
         if keywords.is_a?(Fixnum)
           filename = File.join(TMP_DIR, "#{PID}_#{keywords}.vkd")
           next unless File.exists?(filename)
+          Process.wait(keywords)
           keywords = File.open(filename, "rb") { |file| Marshal.load(file) }
           repository[key] = keywords
           File.delete(filename)
@@ -117,7 +118,12 @@ module Kompleter
       return true unless repository[key].is_a?(Fixnum)
       filename = File.join(TMP_DIR, "#{PID}_#{repository[key]}.vkd")
       exists = File.exists?(filename)
-      File.delete(filename) if exists
+
+      if exists
+        Process.wait(repository[key])
+        File.delete(filename)
+      end
+
       exists
     end
   end
@@ -146,7 +152,7 @@ module Kompleter
 
           filename = File.join(TMP_DIR, "#{PID}_#{$$}.vkd")
           File.open(filename, "wb") { |f| f.write(Marshal.dump(keywords)) }
-          exit!(0)
+          exit(0)
         end
 
         repository[key] = pid
@@ -178,7 +184,7 @@ module Kompleter
 
           filename = File.join(TMP_DIR, "#{PID}_#{$$}.vkd")
           File.open(filename, "wb") { |f| f.write(Marshal.dump(keywords)) }
-          exit!(0)
+          exit(0)
         end
 
         repository[tags_file] = pid
