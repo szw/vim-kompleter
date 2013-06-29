@@ -8,13 +8,15 @@ About
 
 This plugin requires a Vim with Ruby support compiled in. It provides fast, simple, smart and
 reliable keyword completion. It differs from the standard keyword completion by extensive use of
-distance and frequency based algorithms while matching identifiers. The algorithms was inspired by
+distance and frequency based algorithms while matching identifiers. Those algorithms are inspired by
 TextMate's keyword completion behavior.
 
 Best results can be achived with the help of plugins like SuperTab. In case of SuperTab all you have
 to do is to choose the user completion function as the default one:
 
     let g:SuperTabDefaultCompletionType = "<c-x><c-u>"
+
+Vim-Kompleter sets the user completion function to its own `kompleter#Complete`.
 
 
 Forking
@@ -26,17 +28,18 @@ case, or if you just want to disable forking set the temporary directory to empt
     let g:kompleter_tmp_dir = ""
 
 Otherwise make sure it points to a valid and sensible place (by default it points to `/tmp`). This
-is important because forking needs to store some temporary files while working.
+is important because forking needs to store some temporary files if enabled.
 
 If forking is disabled, the plugin may sometimes work less smoothly, however it depends heavily on
 the user configuration and the concrete project settings. For example, without forking it took a 1-2
 seconds to parse a large tags file on Vim startup and it was a noticeable lag.
 
-Early versions of Vim-Kompleter were using threads but it was an unstable solution. Sometimes Ruby
-threads are just dying unexpectedly in Vim causing hard to catch failures or malfunctions. Perhaps
-a Python implementation could handle threading a bit better.
+Early versions of Vim-Kompleter were using threads but it wasn't a stable solution. Sometimes in Vim
+Ruby threads just die unexpectedly and that leads to hard to catch failures or malfunctions. Perhaps
+a Python implementation could handle threading a bit better (but it wouldn't work on ARM processors 
+anyway).
 
-Anyway, forking seems pretty stable and fast enough.
+Right now forking seems pretty stable and fast enough.
 
 
 Case-Sensitive Completion
@@ -46,11 +49,15 @@ Vim-Kompleter provides three modes of case-sensitive completion:
 
 * case-sensitive (`1` - default one)
 * case-insensitive (`0`)
-* smartcase (`2`) - it's often used in Vim, probably because it's handy in searching, and you cannot
-  just disable it in the standard Vim completion engine. In the case you miss that feature you can
-  turn it on. See `:help 'smartcase'` for more info.
+* smartcase (`2`) - if you miss smarcase completion known from standard Vim completion algorithm. 
+  See `:help 'smartcase'` for more info.
 
-To set case-sensitive option use:
+Smartcase is often used in Vim, probably because it's handy in searching and the same search engine 
+settings are used for standard Vim keyword completion algorithm. In other words, you cannot just use
+`smartcase` as a defalut for search/replace commands and not for Vim keyword completion. In 
+Vim-Kompleter this is not the case. You can choose whatever you want. 
+
+For example, to set case-sensitive option use:
 
     let g:kompleter_case_sensitive = 1
 
@@ -58,8 +65,8 @@ To set case-sensitive option use:
 Fuzzy Search
 ------------
 
-It looks like it's the next "must have" nowadays. However, chances are you will not like it very
-much here, because you will find result less accurate. But again, it seems to depend strongly on
+It looks like it's the next "must have" nowadays. However, chances are you won't like it very much,
+because standard matching will provide you very accurate results. But again, it strongly depends on 
 your projects and your writing/coding habits as well. Fuzzy search is turned off by default:
 
     let g:kompleter_fuzzy_search = 0
@@ -70,7 +77,7 @@ Self-Promotion
 
 If you like the plugin, don't hesitate to add a star. This way I can estimate plugin's popularity
 and plan its future development. If something's broken or you've just found a bug, please fill the
-issue. You can also consult pull requests that way and ask about new features.
+Github issue. You can also consult pull requests that way and ask about new features.
 
 
 Author and License
