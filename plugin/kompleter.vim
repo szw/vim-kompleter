@@ -76,7 +76,6 @@ fun! kompleter#Complete(findstart, base)
 endfun
 
 ruby << EOF
-require "thread"
 require "drb/drb"
 
 module Kompleter
