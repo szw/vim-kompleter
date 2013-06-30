@@ -275,6 +275,7 @@ module Kompleter
     unless @data_server_port
       server = TCPServer.new("127.0.0.1", 0)
       @data_server_port = server.addr[1]
+      server.close
     end
     @data_server_port
   end
