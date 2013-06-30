@@ -83,8 +83,8 @@ module Kompleter
   MAX_COMPLETIONS = 10
   DISTANCE_RANGE = 5000
 
-  TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/
-  KEYWORD_REGEX = /[_a-zA-Z]\w*/
+  TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/u
+  KEYWORD_REGEX = /[_a-zA-Z]\w*/u
 
   FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
   CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
@@ -330,7 +330,7 @@ module Kompleter
     if query.length > 0
       case_sensitive = (CASE_SENSITIVE == 2) ? (query =~ /[A-Z]/) : (CASE_SENSITIVE > 0)
       query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
-      query = case_sensitive ? /^#{query}/ : /^#{query}/i
+      query = case_sensitive ? /^#{query}/u : /^#{query}/ui
 
       candidates_from_current_buffer = keywords.keys.find_all { |keyword| query =~ keyword }
     else
