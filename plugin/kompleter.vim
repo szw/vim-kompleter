@@ -92,7 +92,7 @@ module Kompleter
 
   module KeywordParser
     # TODO check if filenames are correctly recognized under Windows
-    def self.parse_tags(filename)
+    def parse_tags(filename)
       keywords = Hash.new(0)
 
       File.open(filename).each_line do |line|
@@ -103,7 +103,7 @@ module Kompleter
       keywords
     end
 
-    def self.parse_text(text)
+    def parse_text(text)
       keywords = Hash.new(0)
       text.scan(KEYWORD_REGEX).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
       keywords
@@ -111,6 +111,8 @@ module Kompleter
   end
 
   class DataServer
+    include KeywordParser
+
     def initialize
       @data_id = 0
       @data = {}
@@ -123,7 +125,7 @@ module Kompleter
       data_id = next_data_id
 
       @threads[data_id] = Thread.new(text, data_id) do |t, did|
-        keywords = KeywordParser.parse_text(t)
+        keywords = parse_text(t)
         @data_mutex.synchronize { @data[did] = keywords }
         @threads_mutex.synchronize { @threads.delete(did) }
       end
@@ -135,7 +137,7 @@ module Kompleter
       data_id = next_data_id
 
       @threads[data_id] = Thread.new(filename, data_id) do |fname, did|
-        keywords = KeywordParser.parse_tags(fname)
+        keywords = parse_tags(fname)
         @data_mutex.synchronize { @data[did] = keywords }
         @threads_mutex.synchronize { @threads.delete(did) }
       end
@@ -166,6 +168,8 @@ module Kompleter
   end
 
   class Repository
+    include KeywordParser
+
     attr_reader :repository
 
     def initialize
@@ -206,14 +210,14 @@ module Kompleter
 
       return unless try_clean_unused(key)
 
-      repository[key] = ASYNC_MODE ? Kompleter.data_server.add_text_async(text) : KeywordParser.parse_text(text)
+      repository[key] = ASYNC_MODE ? Kompleter.data_server.add_text_async(text) : parse_text(text)
     end
   end
 
   class TagsRepository < Repository
     def add(tags_file)
       return unless try_clean_unused(tags_file)
-      repository[tags_file] = ASYNC_MODE ? Kompleter.data_server.add_tags_async(tags_file) : KeywordParser.parse_tags(tags_file)
+      repository[tags_file] = ASYNC_MODE ? Kompleter.data_server.add_tags_async(tags_file) : parse_tags(tags_file)
     end
   end
 
