@@ -83,7 +83,6 @@ module Kompleter
   MIN_KEYWORD_SIZE = 3
   MAX_COMPLETIONS = 10
   DISTANCE_RANGE = 5000
-  PID = $$
 
   TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/
   KEYWORD_REGEX = /[_a-zA-Z]\w*/
@@ -257,8 +256,9 @@ module Kompleter
 
   def self.startup
     if ASYNC_MODE
+      port = data_server_port
       $server_pid = fork do
-        DRb.start_service("druby://localhost:#{PID}", DataServer.new)
+        DRb.start_service("druby://localhost:#{port}", DataServer.new)
         DRb.thread.join
         exit(0)
       end
@@ -268,7 +268,15 @@ module Kompleter
   end
 
   def self.data_server
-    @data_server ||= DRbObject.new_with_uri("druby://localhost:#{PID}")
+    @data_server ||= DRbObject.new_with_uri("druby://localhost:#{data_server_port}")
+  end
+
+  def self.data_server_port
+    unless @data_server_port
+      server = TCPServer.new("127.0.0.1", 0)
+      @data_server_port = server.addr[1]
+    end
+    @data_server_port
   end
 
   def self.complete(query)
