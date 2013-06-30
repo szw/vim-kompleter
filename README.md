@@ -22,24 +22,26 @@ Vim-Kompleter sets the user completion function to its own `kompleter#Complete`.
 Forking
 -------
 
-Kompleter by default uses the "fork" feature which seems unavailable on Windows or NetBSD4. In that
-case, or if you just want to disable forking set the temporary directory to empty string:
+Kompleter by default uses the "fork" feature to perform asynchronous tasks, which seems unavailable
+on Windows or NetBSD4. In that case, or if you just want to disable asynchronous mode set the
+following variable to `0` (by default it is `1`):
 
-    let g:kompleter_tmp_dir = ""
+    let g:kompleter_async_mode = 0
 
-Otherwise make sure it points to a valid and sensible place (by default it points to `/tmp`). This
-is important because forking needs to store some temporary files if enabled.
+If asynchronous mode is disabled, the plugin may sometimes work less smoothly, however it depends
+heavily on the user configuration and the concrete project settings. For example, without async mode
+it took a 1-2 seconds to parse a large tags file on Vim startup and it was a noticeable lag.
 
-If forking is disabled, the plugin may sometimes work less smoothly, however it depends heavily on
-the user configuration and the concrete project settings. For example, without forking it took a 1-2
-seconds to parse a large tags file on Vim startup and it was a noticeable lag.
 
-Early versions of Vim-Kompleter were using threads but it wasn't a stable solution. Sometimes in Vim
-Ruby threads just die unexpectedly and that leads to hard to catch failures or malfunctions. Perhaps
-a Python implementation could handle threading a bit better (but it wouldn't work on ARM processors 
-anyway).
+#### Technical note ####
 
-Right now forking seems pretty stable and fast enough.
+Early versions of Vim-Kompleter were using plain threads but it wasn't a stable solution. Sometimes
+in Vim Ruby threads just die unexpectedly and that leads to hard to catch failures or malfunctions.
+Perhaps a Python implementation could handle threading a bit better (but it wouldn't work on ARM
+processors anyway).
+
+Right now Vim-Kompleter forks a process with DRuby server which performs asynchronous tasks (parsing
+identifiers). It seems pretty stable and fast enough.
 
 
 Case-Sensitive Completion
@@ -49,13 +51,13 @@ Vim-Kompleter provides three modes of case-sensitive completion:
 
 * case-sensitive (`1` - default one)
 * case-insensitive (`0`)
-* smartcase (`2`) - if you miss smarcase completion known from standard Vim completion algorithm. 
+* smartcase (`2`) - if you miss smarcase completion known from standard Vim completion algorithm.
   See `:help 'smartcase'` for more info.
 
-Smartcase is often used in Vim, probably because it's handy in searching and the same search engine 
+Smartcase is often used in Vim, probably because it's handy in searching and the same search engine
 settings are used for standard Vim keyword completion algorithm. In other words, you cannot just use
-`smartcase` as a defalut for search/replace commands and not for Vim keyword completion. In 
-Vim-Kompleter this is not the case. You can choose whatever you want. 
+`smartcase` as a defalut for search/replace commands and not for Vim keyword completion. In
+Vim-Kompleter this is not the case. You can choose whatever you want.
 
 For example, to set case-sensitive option use:
 
@@ -66,7 +68,7 @@ Fuzzy Search
 ------------
 
 It looks like it's the next "must have" nowadays. However, chances are you won't like it very much,
-because standard matching will provide you very accurate results. But again, it strongly depends on 
+because standard matching will provide you very accurate results. But again, it strongly depends on
 your projects and your writing/coding habits as well. Fuzzy search is turned off by default:
 
     let g:kompleter_fuzzy_search = 0

@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.0.8
+" Version:      0.0.9
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -31,9 +31,9 @@ if !exists('g:kompleter_fuzzy_search')
   let g:kompleter_fuzzy_search = 0
 endif
 
-" Set to empty string ("") to disable forking feature.
-if !exists('g:kompleter_tmp_dir')
-  let g:kompleter_tmp_dir = "/tmp"
+" Set to 0 disable asynchronous mode (using forking).
+if !exists('g:kompleter_async_mode')
+  let g:kompleter_async_mode = 1
 endif
 
 " 0 - case insensitive
@@ -43,18 +43,23 @@ if !exists('g:kompleter_case_sensitive')
   let g:kompleter_case_sensitive = 1
 endif
 
-au BufWritePre,BufRead,BufEnter,VimEnter * call s:parse_keywords()
+au VimEnter * call s:startup()
 au VimLeave * call s:cleanup()
+au BufWritePre,BufRead,BufEnter * call s:process_keywords()
 
-fun! s:parse_keywords()
+fun! s:process_keywords()
   let &completefunc = 'kompleter#Complete'
   let &l:completefunc = 'kompleter#Complete'
-  ruby Kompleter.parse_buffer
-  ruby Kompleter.parse_tagfiles
+  ruby Kompleter.process_current_buffer
+  ruby Kompleter.process_tagfiles
 endfun
 
 fun! s:cleanup()
   ruby Kompleter.cleanup
+endfun
+
+fun! s:startup()
+  ruby Kompleter.startup
 endfun
 
 fun! kompleter#Complete(findstart, base)
@@ -71,6 +76,9 @@ fun! kompleter#Complete(findstart, base)
 endfun
 
 ruby << EOF
+require "thread"
+require "drb/drb"
+
 module Kompleter
   MIN_KEYWORD_SIZE = 3
   MAX_COMPLETIONS = 10
@@ -82,7 +90,82 @@ module Kompleter
 
   FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
   CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
-  TMP_DIR = VIM.evaluate("g:kompleter_tmp_dir")
+  ASYNC_MODE = VIM.evaluate("g:kompleter_async_mode") != 0
+
+  module KeywordParser
+    # TODO check if filenames are correctly recognized under Windows
+    def self.parse_tags(filename)
+      keywords = Hash.new(0)
+
+      File.open(filename).each_line do |line|
+        match = TAG_REGEX.match(line)
+        keywords[match[1]] += 1 if match && match[1].length >= MIN_KEYWORD_SIZE
+      end
+
+      keywords
+    end
+
+    def self.parse_text(text)
+      keywords = Hash.new(0)
+      text.scan(KEYWORD_REGEX).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
+      keywords
+    end
+  end
+
+  class DataServer
+    def initialize
+      @data_id = 0
+      @data = {}
+      @data_mutex = Mutex.new
+      @threads = {}
+      @threads_mutex = Mutex.new
+    end
+
+    def add_text_async(text)
+      data_id = next_data_id
+
+      @threads[data_id] = Thread.new(text, data_id) do |t, did|
+        keywords = KeywordParser.parse_text(t)
+        @data_mutex.synchronize { @data[did] = keywords }
+        @threads_mutex.synchronize { @threads.delete(did) }
+      end
+
+      data_id
+    end
+
+    def add_tags_async(filename)
+      data_id = next_data_id
+
+      @threads[data_id] = Thread.new(filename, data_id) do |fname, did|
+        keywords = KeywordParser.parse_tags(fname)
+        @data_mutex.synchronize { @data[did] = keywords }
+        @threads_mutex.synchronize { @threads.delete(did) }
+      end
+
+      data_id
+    end
+
+    def get_data(data_id)
+      return unless @data_mutex.try_lock
+      data = @data.delete(data_id)
+      @data_mutex.unlock
+      data
+    end
+
+    def stop
+      @threads_mutex.lock
+      threads = @threads.dup
+      @threads_mutex.unlock
+      threads.each { |t| t.join }
+      DRb.stop_service
+    end
+
+    private
+
+    def next_data_id
+      @data_id += 1
+    end
+  end
 
   class Repository
     attr_reader :repository
@@ -91,40 +174,25 @@ module Kompleter
       @repository = {}
     end
 
-    def lookup(matcher)
+    def lookup(query)
       candidates = Hash.new(0)
 
       repository.each do |key, keywords|
         if keywords.is_a?(Fixnum)
-          filename = File.join(TMP_DIR, "#{PID}_#{keywords}.vkd")
-          next unless File.exists?(filename)
-          Process.wait(keywords)
-          keywords = File.open(filename, "rb") { |file| Marshal.load(file) }
+          keywords = Kompleter.data_server.get_data(keywords)
+          next unless keywords
           repository[key] = keywords
-          File.delete(filename)
         end
-        words = matcher ? keywords.keys.find_all { |word| matcher.call(word) } : keywords.keys
+        words = query ? keywords.keys.find_all { |word| query =~ word } : keywords.keys
         words.each { |word| candidates[word] += keywords[word] }
       end
 
       candidates.keys.sort { |a, b| candidates[b] <=> candidates[a] }
     end
 
-    def clean_all
-      repository.keys.each { | key | try_clean_unused(key) }
-    end
-
     def try_clean_unused(key)
       return true unless repository[key].is_a?(Fixnum)
-      filename = File.join(TMP_DIR, "#{PID}_#{repository[key]}.vkd")
-      exists = File.exists?(filename)
-
-      if exists
-        Process.wait(repository[key])
-        File.delete(filename)
-      end
-
-      exists
+      !Kompleter.data_server.get_data(repository[key]).nil?
     end
   end
 
@@ -132,7 +200,7 @@ module Kompleter
     def add(number, name, text)
       key = if name
         return unless try_clean_unused(number)
-        repository[number] = {}
+        repository.delete(number)
         name
       else
         number
@@ -140,55 +208,14 @@ module Kompleter
 
       return unless try_clean_unused(key)
 
-      if TMP_DIR.empty?
-        keywords = Hash.new(0)
-        text.scan(KEYWORD_REGEX).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
-        repository[key] = keywords
-      else
-        pid = fork do
-          keywords = Hash.new(0)
-
-          text.scan(KEYWORD_REGEX).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
-
-          filename = File.join(TMP_DIR, "#{PID}_#{$$}.vkd")
-          File.open(filename, "wb") { |f| f.write(Marshal.dump(keywords)) }
-          exit(0)
-        end
-
-        repository[key] = pid
-      end
+      repository[key] = ASYNC_MODE ? Kompleter.data_server.add_text_async(text) : KeywordParser.parse_text(text)
     end
   end
 
   class TagsRepository < Repository
     def add(tags_file)
       return unless try_clean_unused(tags_file)
-
-      if TMP_DIR.empty?
-        keywords = Hash.new(0)
-
-        File.open(tags_file).each_line do |line|
-          match = TAG_REGEX.match(line)
-          keywords[match[1]] += 1 if match && match[1].length >= MIN_KEYWORD_SIZE
-        end
-
-        repository[tags_file] = keywords
-      else
-        pid = fork do
-          keywords = Hash.new(0)
-
-          File.open(tags_file).each_line do |line|
-            match = TAG_REGEX.match(line)
-            keywords[match[1]] += 1 if match && match[1].length >= MIN_KEYWORD_SIZE
-          end
-
-          filename = File.join(TMP_DIR, "#{PID}_#{$$}.vkd")
-          File.open(filename, "wb") { |f| f.write(Marshal.dump(keywords)) }
-          exit(0)
-        end
-
-        repository[tags_file] = pid
-      end
+      repository[tags_file] = ASYNC_MODE ? Kompleter.data_server.add_tags_async(tags_file) : KeywordParser.parse_tags(tags_file)
     end
   end
 
@@ -196,7 +223,8 @@ module Kompleter
   TAGS_REPOSITORY = TagsRepository.new
   TAGS_MTIMES = Hash.new(0)
 
-  def self.parse_buffer
+  def self.process_current_buffer
+    return if ASYNC_MODE && !$server_pid
     buffer = VIM::Buffer.current
     buffer_text = ""
 
@@ -205,7 +233,8 @@ module Kompleter
     BUFFER_REPOSITORY.add(buffer.number, buffer.name, buffer_text)
   end
 
-  def self.parse_tagfiles
+  def self.process_tagfiles
+    return if ASYNC_MODE && !$server_pid
     tag_files = VIM.evaluate("tagfiles()")
     tag_files.each do |file|
       if File.exists?(file)
@@ -219,8 +248,27 @@ module Kompleter
   end
 
   def self.cleanup
-    BUFFER_REPOSITORY.clean_all
-    TAGS_REPOSITORY.clean_all
+    if $server_pid
+      data_server.stop
+      Process.wait($server_pid)
+      $server_pid = nil
+    end
+  end
+
+  def self.startup
+    if ASYNC_MODE
+      $server_pid = fork do
+        DRb.start_service("druby://localhost:#{PID}", DataServer.new)
+        DRb.thread.join
+        exit(0)
+      end
+      sleep 0.001 while $server_pid.nil?
+    end
+    process_tagfiles
+  end
+
+  def self.data_server
+    @data_server ||= DRbObject.new_with_uri("druby://localhost:#{PID}")
   end
 
   def self.complete(query)
@@ -272,10 +320,9 @@ module Kompleter
       query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
       query = case_sensitive ? /^#{query}/ : /^#{query}/i
 
-      matcher = Proc.new { |keyword| query =~ keyword }
-      candidates_from_current_buffer = keywords.keys.find_all { |keyword| matcher.call(keyword) }
+      candidates_from_current_buffer = keywords.keys.find_all { |keyword| query =~ keyword }
     else
-      matcher = nil
+      query = nil
       candidates_from_current_buffer = keywords.keys
     end
 
@@ -292,12 +339,12 @@ module Kompleter
     if candidates.count >= MAX_COMPLETIONS
       return candidates[0, MAX_COMPLETIONS]
     else
-      BUFFER_REPOSITORY.lookup(matcher).each do |buffer_candidate|
+      BUFFER_REPOSITORY.lookup(query).each do |buffer_candidate|
         candidates << buffer_candidate unless candidates.include?(buffer_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
 
-      TAGS_REPOSITORY.lookup(matcher).each do |tags_candidate|
+      TAGS_REPOSITORY.lookup(query).each do |tags_candidate|
         candidates << tags_candidate unless candidates.include?(tags_candidate)
         return candidates if candidates.count == MAX_COMPLETIONS
       end
