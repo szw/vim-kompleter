@@ -6,7 +6,7 @@ A smart keyword completion plugin for Vim.
 About
 -----
 
-This plugin requires a Vim with Ruby support compiled in. It provides fast, simple, smart and
+This plugin requires a Vim with Ruby support compiled in. It provides fast, simple, smart, and
 reliable keyword completion. It differs from the standard keyword completion by extensive use of
 distance and frequency based algorithms for keyword matching. Those algorithms were inspired by
 TextMate's keyword completion behavior.
