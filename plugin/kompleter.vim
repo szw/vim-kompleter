@@ -277,6 +277,7 @@ module Kompleter
       sleep 0.001 while $server_pid.nil?
     end
     process_tagfiles
+    process_current_buffer
   end
 
   def self.data_server
