@@ -50,16 +50,15 @@ au BufWritePre,BufRead,BufEnter * call s:process_keywords()
 fun! s:process_keywords()
   let &completefunc = 'kompleter#Complete'
   let &l:completefunc = 'kompleter#Complete'
-  ruby Kompleter.process_current_buffer
-  ruby Kompleter.process_tagfiles
+  ruby Kompleter.process_all
 endfun
 
 fun! s:cleanup()
-  ruby Kompleter.cleanup
+  ruby Kompleter.stop_data_server
 endfun
 
 fun! s:startup()
-  ruby Kompleter.startup
+  ruby Kompleter.start_data_server
 endfun
 
 fun! kompleter#Complete(findstart, base)
@@ -258,26 +257,53 @@ module Kompleter
     end
   end
 
-  def self.cleanup
-    if $server_pid
-      data_server.stop
+  def self.process_all
+    process_current_buffer
+    process_tagfiles
+  end
+
+  def self.stop_data_server
+    return unless ASYNC_MODE && $server_pid
+    pid = $server_pid
+    $server_pid = nil
+    data_server.stop
+    Process.wait(pid)
+  end
+
+  def self.start_data_server
+    return unless ASYNC_MODE && !$server_pid
+
+    port = data_server_port
+
+    $server_pid = fork do
+      DRb.start_service("druby://localhost:#{port}", DataServer.new)
+      DRb.thread.join
+      exit(0)
+    end
+
+    ticks = 0
+
+    begin
+      data_server.to_s # try perfom anything on server to test whether connection is established
+    rescue DRb::DRbConnError
+      sleep 0.01
+      ticks += 1
+      retry if ticks < 100
+
+      msg = "Kompleter: Error! Cannot connect to the DRuby server at port #{port} in sensible time (1s). \n" \
+            "Please restart Vim and try again. If the problem persists please fill a new Github issue at \n" \
+            "https://github.com/szw/vim-kompleter/issues."
+
+      VIM.command("echohl ErrorMsg")
+      VIM.command("echo '#{msg}'")
+      VIM.command("echohl None")
+
+      Process.kill("KILL", $server_pid)
       Process.wait($server_pid)
       $server_pid = nil
     end
-  end
 
-  def self.startup
-    if ASYNC_MODE
-      port = data_server_port
-      $server_pid = fork do
-        DRb.start_service("druby://localhost:#{port}", DataServer.new)
-        DRb.thread.join
-        exit(0)
-      end
-      sleep 0.001 while $server_pid.nil?
-    end
-    process_tagfiles
-    process_current_buffer
+    process_all
   end
 
   def self.data_server
