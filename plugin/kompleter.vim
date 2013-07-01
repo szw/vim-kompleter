@@ -275,7 +275,7 @@ module Kompleter
 
     port = data_server_port
 
-    $server_pid = fork do
+    pid = fork do
       DRb.start_service("druby://localhost:#{port}", DataServer.new)
       DRb.thread.join
       exit(0)
@@ -284,7 +284,8 @@ module Kompleter
     ticks = 0
 
     begin
-      data_server.to_s # try perfom anything on server to test whether connection is established
+      data_server.to_s     # try perfom anything on server to test whether connection is established
+      $server_pid = pid    # allow access to the server only if it responds
     rescue DRb::DRbConnError
       sleep 0.01
       ticks += 1
@@ -298,9 +299,8 @@ module Kompleter
       VIM.command("echo '#{msg}'")
       VIM.command("echohl None")
 
-      Process.kill("KILL", $server_pid)
-      Process.wait($server_pid)
-      $server_pid = nil
+      Process.kill("KILL", pid)
+      Process.wait(pid)
     end
 
     process_all
