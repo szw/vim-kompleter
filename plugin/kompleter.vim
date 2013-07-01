@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.0.9
+" Version:      0.1.0
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -64,12 +64,7 @@ endfun
 
 fun! kompleter#Complete(findstart, base)
   if a:findstart
-    let line = getline('.')
-    let start = col('.') - 1
-    while start > 0 && line[start - 1] =~ '\w'
-      let start -= 1
-    endwhile
-    return start
+    ruby VIM.command("return #{Kompleter.find_start}")
   else
     ruby VIM.command("return [#{Kompleter.complete(VIM.evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
   endif
@@ -78,13 +73,27 @@ endfun
 ruby << EOF
 require "drb/drb"
 
+if RUBY_VERSION.to_f < 1.9
+  class String
+    def byte_length
+      length
+    end
+  end
+else
+  class String
+    def byte_length
+      bytes.to_a.count
+    end
+  end
+end
+
 module Kompleter
   MIN_KEYWORD_SIZE = 3
   MAX_COMPLETIONS = 10
   DISTANCE_RANGE = 5000
 
   TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/u
-  KEYWORD_REGEX = /[_a-zA-Z]\w*/u
+  KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\w]+/u : /[_[:alnum:]]+/u
 
   FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
   CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
@@ -283,10 +292,40 @@ module Kompleter
     @data_server_port
   end
 
+  def self.find_start
+    start = VIM::Window.current.cursor[1]
+    line = VIM::Buffer.current.line.split(//u)
+    counter = 0
+    real_start = 0
+
+    line.each do |letter|
+      break if counter >= start
+      counter += letter.byte_length
+      real_start += 1
+    end
+
+    while (start > 0) && (real_start > 0) && ((line[real_start - 1] =~ KEYWORD_REGEX) == 0)
+      real_start -= 1
+      start -= line[real_start].byte_length
+    end
+
+    @real_start = real_start
+    @start = start
+  end
+
+  def self.real_start
+    @real_start
+  end
+
+  def self.start
+    @start
+  end
+
   def self.complete(query)
     buffer = VIM::Buffer.current
+    row = VIM::Window.current.cursor[0]
+    column = (RUBY_VERSION.to_f < 1.9) ? start : real_start
 
-    row, column = VIM::Window.current.cursor
     cursor = 0
     text = ""
 
@@ -310,17 +349,12 @@ module Kompleter
       text = text[0, cursor + DISTANCE_RANGE]
     end
 
-    keywords = {}
+    keywords = Hash.new { |hash, key| hash[key] = Array.new }
     count = 0
 
     text.to_enum(:scan, KEYWORD_REGEX).each do |m|
       if m.length >= MIN_KEYWORD_SIZE
-        if keywords[m]
-          keywords[m] << $`.size
-        else
-          keywords[m] = [$`.size]
-        end
-
+        keywords[m] << $`.size
         count += 1
       end
     end
@@ -328,9 +362,15 @@ module Kompleter
     query = query.to_s # it could be a Fixnum if user is trying to complete a number, e.g. 10<C-x><C-u>
 
     if query.length > 0
-      case_sensitive = (CASE_SENSITIVE == 2) ? (query =~ /[A-Z]/) : (CASE_SENSITIVE > 0)
-      query = query.scan(/./).join(".*?") if FUZZY_SEARCH > 0
-      query = case_sensitive ? /^#{query}/u : /^#{query}/ui
+      case_sensitive = (CASE_SENSITIVE == 2) ? !(query =~ /[[:upper:]]+/u).nil? : (CASE_SENSITIVE > 0)
+      query = query.split(//u).join(".*?") if FUZZY_SEARCH > 0
+
+      if RUBY_VERSION.to_f < 1.9
+        query = case_sensitive ? /^#{query}/u : /^#{query}/ui
+      else
+        query = "^#{query}".force_encoding("UTF-8")
+        query = case_sensitive ? Regexp.new(query, Regexp::FIXEDENCODING) : Regexp.new(query, Regexp::FIXEDENCODING | Regexp::IGNORECASE)
+      end
 
       candidates_from_current_buffer = keywords.keys.find_all { |keyword| query =~ keyword }
     else
