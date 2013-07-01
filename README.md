@@ -8,28 +8,48 @@ About
 
 This plugin requires a Vim with Ruby support compiled in. It provides fast, simple, smart and
 reliable keyword completion. It differs from the standard keyword completion by extensive use of
-distance and frequency based algorithms while matching identifiers. Those algorithms are inspired by
+distance and frequency based algorithms for keyword matching. Those algorithms were inspired by
 TextMate's keyword completion behavior.
 
-Best results can be achived with the help of plugins like SuperTab. In case of SuperTab all you have
-to do is to choose the user completion function as the default one:
+Best results can be achived with the help of plugins like
+[SuperTab](https://github.com/ervandew/supertab). In case of
+[SuperTab](https://github.com/ervandew/supertab) all you have to do is to choose the user completion
+function as the default one:
 
     let g:SuperTabDefaultCompletionType = "<c-x><c-u>"
 
-Vim-Kompleter sets the user completion function to its own `kompleter#Complete`.
+Vim-Kompleter sets the user completion function to its own `kompleter#Complete`. Therefore it should
+work also with plugins like [AutoComplPop](http://www.vim.org/scripts/script.php?script_id=1879),
+though I didn't test that yet.
+
+
+Installation
+------------
+
+In case of Pathogen, just clone the repo to your `bundles` directory:
+
+    git clone https://github.com/szw/vim-kompleter.git
+
+If you prefer Vundle, add the following snippet to your `.vimrc` file:
+
+    Bundle "szw/vim-kompleter"
+
+Vim-Kompleter requires Ruby bindings to be present in your Vim. It has been tested with Ruby 1.8.7
+and 2.0.0 (both on Mac OSX) and seems working pretty well. I believe it will work with other
+configurations seamlessly too. In case of any problems create an issue please.
 
 
 Forking
 -------
 
-Kompleter by default uses the "fork" feature to perform asynchronous tasks, which seems unavailable
-on Windows or NetBSD4. In that case, or if you just want to disable asynchronous mode set the
+Kompleter by default uses the "fork" feature to perform asynchronous tasks, which is unavailable
+on Windows or NetBSD4. In that case, or if you just want to disable asynchronous mode please set the
 following variable to `0` (by default it is `1`):
 
     let g:kompleter_async_mode = 0
 
 If asynchronous mode is disabled, the plugin may sometimes work less smoothly, however it depends
-heavily on the user configuration and the concrete project settings. For example, without async mode
+heavily on the user system configuration and the concrete project. For example, without async mode
 it took a 1-2 seconds to parse a large tags file on Vim startup and it was a noticeable lag.
 
 
@@ -40,8 +60,8 @@ in Vim Ruby threads just die unexpectedly and that leads to hard to catch failur
 Perhaps a Python implementation could handle threading a bit better (but it wouldn't work on ARM
 processors anyway).
 
-Right now Vim-Kompleter forks a process with DRuby server which performs asynchronous tasks (parsing
-identifiers). It seems pretty stable and fast enough.
+Right now Vim-Kompleter forks a process with a DRuby server which performs asynchronous tasks (parsing
+keywords). It's actually pretty stable and very fast.
 
 
 Case-Sensitive Completion
@@ -50,28 +70,44 @@ Case-Sensitive Completion
 Vim-Kompleter provides three modes of case-sensitive completion:
 
 * case-sensitive (`1` - default one)
+
 * case-insensitive (`0`)
-* smartcase (`2`) - if you miss smarcase completion known from standard Vim completion algorithm.
+
+* smartcase (`2`)
+
+  In case you miss so-called _smartcase_ completion known from standard Vim completion algorithm.
   See `:help 'smartcase'` for more info.
 
-Smartcase is often used in Vim, probably because it's handy in searching and the same search engine
-settings are used for standard Vim keyword completion algorithm. In other words, you cannot just use
-`smartcase` as a defalut for search/replace commands and not for Vim keyword completion. In
-Vim-Kompleter this is not the case. You can choose whatever you want.
+Smartcase is often used in Vim because it's handy while searching or substitute things. The same
+search engine settings are used for the standard Vim keyword completion algorithm. In this way
+you cannot just limit the `smartcase` option only to searching/substituting as command facility.
+It will also _enhance_ Vim's keyword matching and that is really frustrating. But if you used to
+work with smartcase, it's okay. You can enable it in Vim-Kompleter too:
 
-For example, to set case-sensitive option use:
+    let g:kompleter_case_sensitive = 2
 
-    let g:kompleter_case_sensitive = 1
+By default, the plain case sensitive completion is set (`let g:kompleter_case_sensitive = 1`).
 
 
 Fuzzy Search
 ------------
 
 It looks like it's the next "must have" nowadays. However, chances are you won't like it very much,
-because standard matching will provide you very accurate results. But again, it strongly depends on
-your projects and your writing/coding habits as well. Fuzzy search is turned off by default:
+because standard matching will provide you highly accurate results. But again, it strongly depends
+on your projects and your writing/coding habits as well. Fuzzy search (turned off by default) can be
+enabled like below:
 
-    let g:kompleter_fuzzy_search = 0
+    let g:kompleter_fuzzy_search = 1
+
+
+Unicode Support
+---------------
+
+Vim-Kompleter works with multibyte strings (even with Ruby 1.8.7). It can parse and complete
+keywords with Unicode characters, like _żaba_ (a frog in Polish) or _Gdańsk_ (a city name). If you
+have Vim compiled with Ruby 1.9 or greater it should even differentiate correctly upper and lower
+case characters. For example if you complete _ż_ you get candidates like _żaba_ but not _Żory_
+(another city). Ruby 1.8.7 is a bit dumb here, but anyways Unicode works quite nice, isn't it? :)
 
 
 Self-Promotion
@@ -85,6 +121,10 @@ Github issue. You can also consult pull requests that way and ask about new feat
 Author and License
 ------------------
 
-Copyright (c) 2013 Szymon Wrozynski and Contributors. Licensed under a Vim-like license.
+Copyright (c) 2013 Szymon Wrozynski and Contributors. Licensed under a the same license as Vim
+itself. See `:help license` for more details.
 
-Thanks to Val Markovic and YouCompleteMe (both plugin and community) for inspiration.
+Thanks to [Valloric](https://github.com/Valloric) and
+[YouCompleteMe](https://github.com/Valloric/YouCompleteMe) community for inspiration.
+
+Also thanks to [Gotar](https://github.com/gotar) for bugs catching :).
