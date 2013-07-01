@@ -22,7 +22,7 @@
 " https://github.com/szw/vim-kompleter/blob/master/README.md
 
 if exists("g:loaded_kompleter") || &cp || v:version < 700 || !has("ruby")
-    finish
+  finish
 endif
 
 let g:loaded_kompleter = 1
@@ -360,19 +360,13 @@ module Kompleter
       end
     end
 
-    query = query.to_s # it could be a Fixnum if user is trying to complete a number, e.g. 10<C-x><C-u>
+    # convert to string in case of Fixnum, e.g. after 10<C-x><C-u> and force UTF-8 for Ruby >= 1.9
+    query = (RUBY_VERSION.to_f < 1.9) ? query.to_s : query.to_s.force_encoding("UTF-8")
 
     if query.length > 0
       case_sensitive = (CASE_SENSITIVE == 2) ? !(query =~ /[[:upper:]]+/u).nil? : (CASE_SENSITIVE > 0)
       query = query.split(//u).join(".*?") if FUZZY_SEARCH > 0
-
-      if RUBY_VERSION.to_f < 1.9
-        query = case_sensitive ? /^#{query}/u : /^#{query}/ui
-      else
-        query = "^#{query}".force_encoding("UTF-8")
-        query = case_sensitive ? Regexp.new(query, Regexp::FIXEDENCODING) : Regexp.new(query, Regexp::FIXEDENCODING | Regexp::IGNORECASE)
-      end
-
+      query = case_sensitive ? /^#{query}/u : /^#{query}/ui
       candidates_from_current_buffer = keywords.keys.find_all { |keyword| query =~ keyword }
     else
       query = nil
