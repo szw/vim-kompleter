@@ -168,6 +168,10 @@ module Kompleter
       DRb.stop_service
     end
 
+    def ready?
+      true
+    end
+
     private
 
     def next_data_id
@@ -284,8 +288,7 @@ module Kompleter
     ticks = 0
 
     begin
-      data_server.to_s     # try perfom anything on server to test whether connection is established
-      $server_pid = pid    # allow access to the server only if it responds
+      $server_pid = pid if data_server.ready?
     rescue DRb::DRbConnError
       sleep 0.01
       ticks += 1
