@@ -53,7 +53,7 @@ heavily on the user system configuration and the concrete project. For example, 
 it took a 1-2 seconds to parse a large tags file on Vim startup and it was a noticeable lag.
 
 
-#### Technical note ####
+#### Technical Note ####
 
 Early versions of Vim-Kompleter were using plain threads but it wasn't a stable solution. Sometimes
 in Vim Ruby threads just die unexpectedly and that leads to hard to catch failures or malfunctions.
@@ -61,7 +61,14 @@ Perhaps a Python implementation could handle threading a bit better (but it woul
 processors anyway).
 
 Right now Vim-Kompleter forks a process with a DRuby server which performs asynchronous tasks (parsing
-keywords). It's actually pretty stable and very fast.
+keywords). It's actually pretty stable and very fast assuming you run a decent console Vim.
+
+
+#### Known Issues ####
+
+It has been reported that the asynchronous mode causes some unpredictable behavior of MacVim. One to
+five times it may cause a segfault on startup. If you use MacVim and experience such behavior,
+please consider to turn off the async mode completely until those issues are fixed.
 
 
 Case-Sensitive Completion

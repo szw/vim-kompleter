@@ -292,7 +292,7 @@ module Kompleter
     rescue DRb::DRbConnError
       sleep 0.01
       ticks += 1
-      retry if ticks < 100
+      retry if ticks < 500
 
       Process.kill("KILL", pid)
       Process.wait(pid)
@@ -300,7 +300,7 @@ module Kompleter
       remove_const(:ASYNC_MODE)
       const_set(:ASYNC_MODE, false)
 
-      msg = "Kompleter: Error! Cannot connect to the DRuby server at port #{port} in sensible time (1s). \n" \
+      msg = "Kompleter: Error! Cannot connect to the DRuby server at port #{port} in sensible time (over 5s). \n" \
             "Please restart Vim and try again. If the problem persists please fill a new Github issue at \n" \
             "https://github.com/szw/vim-kompleter/issues. ASYNC MODE has been disabled for this session."
 
