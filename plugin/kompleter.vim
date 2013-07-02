@@ -272,10 +272,12 @@ module Kompleter
     $server_pid = nil
     data_server.stop
     Process.wait(pid)
+    DRb.stop_service
   end
 
   def self.start_data_server
     return unless ASYNC_MODE && !$server_pid
+    DRb.start_service
 
     port = data_server_port
 
@@ -286,11 +288,10 @@ module Kompleter
     end
 
     ticks = 0
-
     begin
+      sleep 0.01
       $server_pid = pid if data_server.ready?
     rescue DRb::DRbConnError
-      sleep 0.01
       ticks += 1
       retry if ticks < 500
 
