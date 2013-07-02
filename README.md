@@ -61,14 +61,7 @@ Perhaps a Python implementation could handle threading a bit better (but it woul
 processors anyway).
 
 Right now Vim-Kompleter forks a process with a DRuby server which performs asynchronous tasks (parsing
-keywords). It's actually pretty stable and very fast assuming you run a decent console Vim.
-
-
-#### Known Issues ####
-
-It has been reported that the asynchronous mode causes some unpredictable behavior of MacVim. One to
-five times it may cause a segfault on startup. If you use MacVim and experience such behavior,
-please consider to turn off the async mode completely until those issues are fixed.
+keywords). It's actually seems pretty stable and very fast.
 
 
 Case-Sensitive Completion

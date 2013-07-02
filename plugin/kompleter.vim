@@ -50,22 +50,22 @@ au BufWritePre,BufRead,BufEnter * call s:process_keywords()
 fun! s:process_keywords()
   let &completefunc = 'kompleter#Complete'
   let &l:completefunc = 'kompleter#Complete'
-  ruby Kompleter.process_all
+  ruby Kompleter::PLUGIN.process_all
 endfun
 
 fun! s:cleanup()
-  ruby Kompleter.stop_data_server
+  ruby Kompleter::PLUGIN.stop_data_server
 endfun
 
 fun! s:startup()
-  ruby Kompleter.start_data_server
+  ruby Kompleter::PLUGIN.start_data_server
 endfun
 
-fun! kompleter#Complete(findstart, base)
-  if a:findstart
-    ruby VIM.command("return #{Kompleter.find_start}")
+fun! kompleter#Complete(find_start_column, base)
+  if a:find_start_column
+    ruby VIM.command("return #{Kompleter::PLUGIN.find_start_column}")
   else
-    ruby VIM.command("return [#{Kompleter.complete(VIM.evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
+    ruby VIM.command("return [#{Kompleter::PLUGIN.complete(VIM.evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
   endif
 endfun
 
@@ -193,7 +193,7 @@ module Kompleter
 
       repository.each do |key, keywords|
         if keywords.is_a?(Fixnum)
-          keywords = Kompleter.data_server.get_data(keywords)
+          keywords = PLUGIN.data_server.get_data(keywords)
           next unless keywords
           repository[key] = keywords
         end
@@ -206,7 +206,7 @@ module Kompleter
 
     def try_clean_unused(key)
       return true unless repository[key].is_a?(Fixnum)
-      !Kompleter.data_server.get_data(repository[key]).nil?
+      !PLUGIN.data_server.get_data(repository[key]).nil?
     end
   end
 
@@ -222,215 +222,206 @@ module Kompleter
 
       return unless try_clean_unused(key)
 
-      repository[key] = ASYNC_MODE ? Kompleter.data_server.add_text_async(text) : parse_text(text)
+      repository[key] = ASYNC_MODE ? PLUGIN.data_server.add_text_async(text) : parse_text(text)
     end
   end
 
   class TagsRepository < Repository
     def add(tags_file)
       return unless try_clean_unused(tags_file)
-      repository[tags_file] = ASYNC_MODE ? Kompleter.data_server.add_tags_async(tags_file) : parse_tags(tags_file)
+      repository[tags_file] = ASYNC_MODE ? PLUGIN.data_server.add_tags_async(tags_file) : parse_tags(tags_file)
     end
   end
 
-  BUFFER_REPOSITORY = BufferRepository.new
-  TAGS_REPOSITORY = TagsRepository.new
-  TAGS_MTIMES = Hash.new(0)
+  class Plugin
+    attr_reader :buffer_repository, :tags_repository, :tags_mtimes, :data_server, :server_pid, :start_column, :real_start_column
 
-  def self.process_current_buffer
-    return if ASYNC_MODE && !$server_pid
-    buffer = VIM::Buffer.current
-    buffer_text = ""
+    def initialize
+      @buffer_repository = BufferRepository.new
+      @tags_repository = TagsRepository.new
+      @tags_mtimes = Hash.new(0)
+    end
 
-    (1..buffer.count).each { |n| buffer_text << "#{buffer[n]}\n" }
+    def process_current_buffer
+      return if ASYNC_MODE && !server_pid
+      buffer = VIM::Buffer.current
+      buffer_text = ""
 
-    BUFFER_REPOSITORY.add(buffer.number, buffer.name, buffer_text)
-  end
+      (1..buffer.count).each { |n| buffer_text << "#{buffer[n]}\n" }
 
-  def self.process_tagfiles
-    return if ASYNC_MODE && !$server_pid
-    tag_files = VIM.evaluate("tagfiles()")
-    tag_files.each do |file|
-      if File.exists?(file)
-        mtime = File.mtime(file).to_i
-        if TAGS_MTIMES[file] < mtime
-          TAGS_MTIMES[file] = mtime
-          TAGS_REPOSITORY.add(file)
+      buffer_repository.add(buffer.number, buffer.name, buffer_text)
+    end
+
+    def process_tagfiles
+      return if ASYNC_MODE && !server_pid
+      tag_files = VIM.evaluate("tagfiles()")
+      tag_files.each do |file|
+        if File.exists?(file)
+          mtime = File.mtime(file).to_i
+          if tags_mtimes[file] < mtime
+            tags_mtimes[file] = mtime
+            tags_repository.add(file)
+          end
         end
       end
     end
-  end
 
-  def self.process_all
-    process_current_buffer
-    process_tagfiles
-  end
-
-  def self.stop_data_server
-    return unless ASYNC_MODE && $server_pid
-    pid = $server_pid
-    $server_pid = nil
-    data_server.stop
-    Process.wait(pid)
-    DRb.stop_service
-  end
-
-  def self.start_data_server
-    return unless ASYNC_MODE && !$server_pid
-    DRb.start_service
-
-    port = data_server_port
-
-    pid = fork do
-      DRb.start_service("druby://localhost:#{port}", DataServer.new)
-      DRb.thread.join
-      exit(0)
+    def process_all
+      process_current_buffer
+      process_tagfiles
     end
 
-    ticks = 0
-    begin
-      sleep 0.01
-      $server_pid = pid if data_server.ready?
-    rescue DRb::DRbConnError
-      ticks += 1
-      retry if ticks < 500
-
-      Process.kill("KILL", pid)
+    def stop_data_server
+      return unless ASYNC_MODE && server_pid
+      pid = server_pid
+      @server_pid = nil
+      data_server.stop
       Process.wait(pid)
-
-      remove_const(:ASYNC_MODE)
-      const_set(:ASYNC_MODE, false)
-
-      msg = "Kompleter: Error! Cannot connect to the DRuby server at port #{port} in sensible time (over 5s). \n" \
-            "Please restart Vim and try again. If the problem persists please fill a new Github issue at \n" \
-            "https://github.com/szw/vim-kompleter/issues. ASYNC MODE has been disabled for this session."
-
-      VIM.command("echohl ErrorMsg")
-      VIM.command("echo '#{msg}'")
-      VIM.command("echohl None")
+      DRb.stop_service
     end
 
-    process_all
-  end
+    def start_data_server
+      return unless ASYNC_MODE && !server_pid
+      DRb.start_service
 
-  def self.data_server
-    @data_server ||= DRbObject.new_with_uri("druby://localhost:#{data_server_port}")
-  end
+      tcp_server = TCPServer.new("127.0.0.1", 0)
+      port = tcp_server.addr[1]
+      tcp_server.close
 
-  def self.data_server_port
-    unless @data_server_port
-      server = TCPServer.new("127.0.0.1", 0)
-      @data_server_port = server.addr[1]
-      server.close
-    end
-    @data_server_port
-  end
-
-  def self.find_start
-    start = VIM::Window.current.cursor[1]
-    line = VIM::Buffer.current.line.split(//u)
-    counter = 0
-    real_start = 0
-
-    line.each do |letter|
-      break if counter >= start
-      counter += letter.byte_length
-      real_start += 1
-    end
-
-    while (start > 0) && (real_start > 0) && ((line[real_start - 1] =~ KEYWORD_REGEX) == 0)
-      real_start -= 1
-      start -= line[real_start].byte_length
-    end
-
-    @real_start = real_start
-    @start = start
-  end
-
-  def self.real_start
-    @real_start
-  end
-
-  def self.start
-    @start
-  end
-
-  def self.complete(query)
-    buffer = VIM::Buffer.current
-    row = VIM::Window.current.cursor[0]
-    column = (RUBY_VERSION.to_f < 1.9) ? start : real_start
-
-    cursor = 0
-    text = ""
-
-    (1..buffer.count).each do |n|
-      line = "#{buffer[n]}\n"
-      text << line
-
-      if row > n
-        cursor += line.length
-      elsif row == n
-        cursor += column
-      end
-    end
-
-    if cursor > DISTANCE_RANGE
-      text = text[(cursor - DISTANCE_RANGE)..-1]
-      cursor = DISTANCE_RANGE
-    end
-
-    if text.length > (cursor + DISTANCE_RANGE)
-      text = text[0, cursor + DISTANCE_RANGE]
-    end
-
-    keywords = Hash.new { |hash, key| hash[key] = Array.new }
-    count = 0
-
-    text.to_enum(:scan, KEYWORD_REGEX).each do |m|
-      if m.length >= MIN_KEYWORD_SIZE
-        keywords[m] << $`.size
-        count += 1
-      end
-    end
-
-    # convert to string in case of Fixnum, e.g. after 10<C-x><C-u> and force UTF-8 for Ruby >= 1.9
-    query = (RUBY_VERSION.to_f < 1.9) ? query.to_s : query.to_s.force_encoding("UTF-8")
-
-    if query.length > 0
-      case_sensitive = (CASE_SENSITIVE == 2) ? !(query =~ /[[:upper:]]+/u).nil? : (CASE_SENSITIVE > 0)
-      query = query.split(//u).join(".*?") if FUZZY_SEARCH > 0
-      query = case_sensitive ? /^#{query}/u : /^#{query}/ui
-      candidates_from_current_buffer = keywords.keys.find_all { |keyword| query =~ keyword }
-    else
-      query = nil
-      candidates_from_current_buffer = keywords.keys
-    end
-
-    distances = {}
-
-    candidates_from_current_buffer.each do |candidate|
-      distance = keywords[candidate].map { |pos| (cursor - pos).abs }.min
-      distance -= distance * (keywords[candidate].count / count.to_f)
-      distances[candidate] = distance
-    end
-
-    candidates = candidates_from_current_buffer.sort { |a, b| distances[a] <=> distances[b] }
-
-    if candidates.count >= MAX_COMPLETIONS
-      return candidates[0, MAX_COMPLETIONS]
-    else
-      BUFFER_REPOSITORY.lookup(query).each do |buffer_candidate|
-        candidates << buffer_candidate unless candidates.include?(buffer_candidate)
-        return candidates if candidates.count == MAX_COMPLETIONS
+      pid = fork do
+        DRb.start_service("druby://localhost:#{port}", DataServer.new)
+        DRb.thread.join
+        exit(0)
       end
 
-      TAGS_REPOSITORY.lookup(query).each do |tags_candidate|
-        candidates << tags_candidate unless candidates.include?(tags_candidate)
-        return candidates if candidates.count == MAX_COMPLETIONS
+      @data_server = DRbObject.new_with_uri("druby://localhost:#{port}")
+
+      ticks = 0
+
+      begin
+        sleep 0.01
+        @server_pid = pid if @data_server.ready?
+      rescue DRb::DRbConnError
+        retry if (ticks += 1) < 500
+
+        Process.kill("KILL", pid)
+        Process.wait(pid)
+
+        remove_const(:ASYNC_MODE)
+        const_set(:ASYNC_MODE, false)
+
+        msg = "Kompleter error: Cannot connect to the DRuby server at port #{port} in sensible time (over 5s). \n" \
+              "Please restart Vim and try again. If the problem persists please open a new Github issue at \n" \
+              "https://github.com/szw/vim-kompleter/issues. ASYNC MODE has been disabled for this session."
+
+        VIM.command("echohl ErrorMsg")
+        VIM.command("echo '#{msg}'")
+        VIM.command("echohl None")
       end
+
+      process_all
     end
 
-    candidates
+    def find_start_column
+      start_column = VIM::Window.current.cursor[1]
+      line = VIM::Buffer.current.line.split(//u)
+      counter = 0
+      real_start_column = 0
+
+      line.each do |letter|
+        break if counter >= start_column
+        counter += letter.byte_length
+        real_start_column += 1
+      end
+
+      while (start_column > 0) && (real_start_column > 0) && ((line[real_start_column - 1] =~ KEYWORD_REGEX) == 0)
+        real_start_column -= 1
+        start_column -= line[real_start_column].byte_length
+      end
+
+      @real_start_column = real_start_column
+      @start_column = start_column
+    end
+
+    def complete(query)
+      buffer = VIM::Buffer.current
+      row = VIM::Window.current.cursor[0]
+      column = (RUBY_VERSION.to_f < 1.9) ? start_column : real_start_column
+
+      cursor = 0
+      text = ""
+
+      (1..buffer.count).each do |n|
+        line = "#{buffer[n]}\n"
+        text << line
+
+        if row > n
+          cursor += line.length
+        elsif row == n
+          cursor += column
+        end
+      end
+
+      if cursor > DISTANCE_RANGE
+        text = text[(cursor - DISTANCE_RANGE)..-1]
+        cursor = DISTANCE_RANGE
+      end
+
+      if text.length > (cursor + DISTANCE_RANGE)
+        text = text[0, cursor + DISTANCE_RANGE]
+      end
+
+      keywords = Hash.new { |hash, key| hash[key] = Array.new }
+      count = 0
+
+      text.to_enum(:scan, KEYWORD_REGEX).each do |m|
+        if m.length >= MIN_KEYWORD_SIZE
+          keywords[m] << $`.size
+          count += 1
+        end
+      end
+
+      # convert to string in case of Fixnum, e.g. after 10<C-x><C-u> and force UTF-8 for Ruby >= 1.9
+      query = (RUBY_VERSION.to_f < 1.9) ? query.to_s : query.to_s.force_encoding("UTF-8")
+
+      if query.length > 0
+        case_sensitive = (CASE_SENSITIVE == 2) ? !(query =~ /[[:upper:]]+/u).nil? : (CASE_SENSITIVE > 0)
+        query = query.split(//u).join(".*?") if FUZZY_SEARCH > 0
+        query = case_sensitive ? /^#{query}/u : /^#{query}/ui
+        candidates_from_current_buffer = keywords.keys.find_all { |keyword| query =~ keyword }
+      else
+        query = nil
+        candidates_from_current_buffer = keywords.keys
+      end
+
+      distances = {}
+
+      candidates_from_current_buffer.each do |candidate|
+        distance = keywords[candidate].map { |pos| (cursor - pos).abs }.min
+        distance -= distance * (keywords[candidate].count / count.to_f)
+        distances[candidate] = distance
+      end
+
+      candidates = candidates_from_current_buffer.sort { |a, b| distances[a] <=> distances[b] }
+
+      if candidates.count >= MAX_COMPLETIONS
+        return candidates[0, MAX_COMPLETIONS]
+      else
+        buffer_repository.lookup(query).each do |buffer_candidate|
+          candidates << buffer_candidate unless candidates.include?(buffer_candidate)
+          return candidates if candidates.count == MAX_COMPLETIONS
+        end
+
+        tags_repository.lookup(query).each do |tags_candidate|
+          candidates << tags_candidate unless candidates.include?(tags_candidate)
+          return candidates if candidates.count == MAX_COMPLETIONS
+        end
+      end
+
+      candidates
+    end
   end
+
+  PLUGIN = Plugin.new
 end
 EOF
