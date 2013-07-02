@@ -294,16 +294,19 @@ module Kompleter
       ticks += 1
       retry if ticks < 100
 
+      Process.kill("KILL", pid)
+      Process.wait(pid)
+
+      remove_const(:ASYNC_MODE)
+      const_set(:ASYNC_MODE, false)
+
       msg = "Kompleter: Error! Cannot connect to the DRuby server at port #{port} in sensible time (1s). \n" \
             "Please restart Vim and try again. If the problem persists please fill a new Github issue at \n" \
-            "https://github.com/szw/vim-kompleter/issues."
+            "https://github.com/szw/vim-kompleter/issues. ASYNC MODE has been disabled for this session."
 
       VIM.command("echohl ErrorMsg")
       VIM.command("echo '#{msg}'")
       VIM.command("echohl None")
-
-      Process.kill("KILL", pid)
-      Process.wait(pid)
     end
 
     process_all
