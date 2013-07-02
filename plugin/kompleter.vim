@@ -50,22 +50,22 @@ au BufWritePre,BufRead,BufEnter * call s:process_keywords()
 fun! s:process_keywords()
   let &completefunc = 'kompleter#Complete'
   let &l:completefunc = 'kompleter#Complete'
-  ruby Kompleter::PLUGIN.process_all
+  ruby KOMPLETER.process_all
 endfun
 
 fun! s:cleanup()
-  ruby Kompleter::PLUGIN.stop_data_server
+  ruby KOMPLETER.stop_data_server
 endfun
 
 fun! s:startup()
-  ruby Kompleter::PLUGIN.start_data_server
+  ruby KOMPLETER.start_data_server
 endfun
 
 fun! kompleter#Complete(find_start_column, base)
   if a:find_start_column
-    ruby VIM.command("return #{Kompleter::PLUGIN.find_start_column}")
+    ruby VIM.command("return #{KOMPLETER.find_start_column}")
   else
-    ruby VIM.command("return [#{Kompleter::PLUGIN.complete(VIM.evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
+    ruby VIM.command("return [#{KOMPLETER.complete(VIM.evaluate("a:base")).map { |c| "{ 'word': '#{c}', 'dup': 1 }" }.join(", ") }]")
   endif
 endfun
 
@@ -184,8 +184,13 @@ module Kompleter
 
     attr_reader :repository
 
-    def initialize
+    def initialize(kompleter)
+      @kompleter = kompleter
       @repository = {}
+    end
+
+    def data_server
+      @kompleter.data_server
     end
 
     def lookup(query)
@@ -193,7 +198,7 @@ module Kompleter
 
       repository.each do |key, keywords|
         if keywords.is_a?(Fixnum)
-          keywords = PLUGIN.data_server.get_data(keywords)
+          keywords = data_server.get_data(keywords)
           next unless keywords
           repository[key] = keywords
         end
@@ -206,7 +211,7 @@ module Kompleter
 
     def try_clean_unused(key)
       return true unless repository[key].is_a?(Fixnum)
-      !PLUGIN.data_server.get_data(repository[key]).nil?
+      !data_server.get_data(repository[key]).nil?
     end
   end
 
@@ -222,23 +227,23 @@ module Kompleter
 
       return unless try_clean_unused(key)
 
-      repository[key] = ASYNC_MODE ? PLUGIN.data_server.add_text_async(text) : parse_text(text)
+      repository[key] = ASYNC_MODE ? data_server.add_text_async(text) : parse_text(text)
     end
   end
 
   class TagsRepository < Repository
     def add(tags_file)
       return unless try_clean_unused(tags_file)
-      repository[tags_file] = ASYNC_MODE ? PLUGIN.data_server.add_tags_async(tags_file) : parse_tags(tags_file)
+      repository[tags_file] = ASYNC_MODE ? data_server.add_tags_async(tags_file) : parse_tags(tags_file)
     end
   end
 
-  class Plugin
+  class Kompleter
     attr_reader :buffer_repository, :tags_repository, :tags_mtimes, :data_server, :server_pid, :start_column, :real_start_column
 
     def initialize
-      @buffer_repository = BufferRepository.new
-      @tags_repository = TagsRepository.new
+      @buffer_repository = BufferRepository.new(self)
+      @tags_repository = TagsRepository.new(self)
       @tags_mtimes = Hash.new(0)
     end
 
@@ -307,8 +312,8 @@ module Kompleter
         Process.kill("KILL", pid)
         Process.wait(pid)
 
-        remove_const(:ASYNC_MODE)
-        const_set(:ASYNC_MODE, false)
+        ::Kompleter.send(:remove_const, :ASYNC_MODE)
+        ::Kompleter.const_set(:ASYNC_MODE, false)
 
         msg = "Kompleter error: Cannot connect to the DRuby server at port #{port} in sensible time (over 5s). \n" \
               "Please restart Vim and try again. If the problem persists please open a new Github issue at \n" \
@@ -421,7 +426,7 @@ module Kompleter
       candidates
     end
   end
-
-  PLUGIN = Plugin.new
 end
+
+KOMPLETER = Kompleter::Kompleter.new
 EOF
