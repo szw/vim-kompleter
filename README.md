@@ -61,7 +61,7 @@ Perhaps a Python implementation could handle threading a bit better (but it woul
 processors anyway).
 
 Right now Vim-Kompleter forks a process with a DRuby server which performs asynchronous tasks (parsing
-keywords). It's actually seems pretty stable and very fast.
+keywords). It actually seems pretty stable and very fast.
 
 
 Case-Sensitive Completion
