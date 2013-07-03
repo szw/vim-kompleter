@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.1.0
+" Version:      0.1.1
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -45,7 +45,7 @@ endif
 
 au VimEnter * call s:startup()
 au VimLeave * call s:cleanup()
-au BufWritePre,BufRead,BufEnter * call s:process_keywords()
+au BufEnter,BufLeave * call s:process_keywords()
 
 fun! s:process_keywords()
   let &completefunc = 'kompleter#Complete'
@@ -216,18 +216,9 @@ module Kompleter
   end
 
   class BufferRepository < Repository
-    def add(number, name, text)
-      key = if name
-        return unless try_clean_unused(number)
-        repository.delete(number)
-        name
-      else
-        number
-      end
-
-      return unless try_clean_unused(key)
-
-      repository[key] = ASYNC_MODE ? data_server.add_text_async(text) : parse_text(text)
+    def add(number, text)
+      return unless try_clean_unused(number)
+      repository[number] = ASYNC_MODE ? data_server.add_text_async(text) : parse_text(text)
     end
   end
 
@@ -239,27 +230,36 @@ module Kompleter
   end
 
   class Kompleter
-    attr_reader :buffer_repository, :tags_repository, :tags_mtimes, :data_server, :server_pid, :start_column, :real_start_column
+    attr_reader :buffer_repository, :buffer_ticks, :tags_repository, :tags_mtimes, :data_server, :server_pid, :start_column, :real_start_column
 
     def initialize
       @buffer_repository = BufferRepository.new(self)
+      @buffer_ticks = {}
       @tags_repository = TagsRepository.new(self)
       @tags_mtimes = Hash.new(0)
     end
 
     def process_current_buffer
       return if ASYNC_MODE && !server_pid
+
       buffer = VIM::Buffer.current
+      tick = VIM.evaluate("b:changedtick")
+
+      return if buffer_ticks[buffer.number] == tick
+
+      buffer_ticks[buffer.number] = tick
       buffer_text = ""
 
       (1..buffer.count).each { |n| buffer_text << "#{buffer[n]}\n" }
 
-      buffer_repository.add(buffer.number, buffer.name, buffer_text)
+      buffer_repository.add(buffer.number, buffer_text)
     end
 
     def process_tagfiles
       return if ASYNC_MODE && !server_pid
+
       tag_files = VIM.evaluate("tagfiles()")
+
       tag_files.each do |file|
         if File.exists?(file)
           mtime = File.mtime(file).to_i
