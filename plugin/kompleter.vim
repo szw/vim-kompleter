@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.1.1
+" Version:      0.1.2
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -45,12 +45,19 @@ endif
 
 au VimEnter * call s:startup()
 au VimLeave * call s:cleanup()
-au BufEnter,BufLeave * call s:process_keywords()
 
-fun! s:process_keywords()
+fun! s:prepare_buffer()
   let &completefunc = 'kompleter#Complete'
   let &l:completefunc = 'kompleter#Complete'
+  call s:process_keywords()
+endfun
+
+fun! s:process_keywords()
   ruby KOMPLETER.process_all
+endfun
+
+fun! s:expire_buffer(number)
+  ruby KOMPLETER.expire_buffer(VIM.evaluate("a:number").to_i)
 endfun
 
 fun! s:cleanup()
@@ -58,7 +65,11 @@ fun! s:cleanup()
 endfun
 
 fun! s:startup()
+  au BufEnter,BufRead * call s:prepare_buffer()
+  au CursorHold * call s:process_keywords()
+  au BufUnload * call s:expire_buffer(expand('<abuf>'))
   ruby KOMPLETER.start_data_server
+  call s:prepare_buffer()
 endfun
 
 fun! kompleter#Complete(find_start_column, base)
@@ -71,6 +82,7 @@ endfun
 
 ruby << EOF
 require "drb/drb"
+require "pathname"
 
 if RUBY_VERSION.to_f < 1.9
   class String
@@ -99,11 +111,10 @@ module Kompleter
   ASYNC_MODE = VIM.evaluate("g:kompleter_async_mode") != 0
 
   module KeywordParser
-    # TODO check if filenames are correctly recognized under Windows
     def parse_tags(filename)
       keywords = Hash.new(0)
 
-      File.open(filename).each_line do |line|
+      File.open(Pathname.new(filename).realpath).each_line do |line|
         match = TAG_REGEX.match(line)
         keywords[match[1]] += 1 if match && match[1].length >= MIN_KEYWORD_SIZE
       end
@@ -124,55 +135,58 @@ module Kompleter
     def initialize
       @data_id = 0
       @data = {}
+      @workers = {}
       @data_mutex = Mutex.new
-      @threads = {}
-      @threads_mutex = Mutex.new
+      @workers_mutex = Mutex.new
     end
 
     def add_text_async(text)
-      data_id = next_data_id
-
-      @threads[data_id] = Thread.new(text, data_id) do |t, did|
-        keywords = parse_text(t)
-        @data_mutex.synchronize { @data[did] = keywords }
-        @threads_mutex.synchronize { @threads.delete(did) }
-      end
-
-      data_id
+      new_work_async(:parse_text, text)
     end
 
     def add_tags_async(filename)
-      data_id = next_data_id
-
-      @threads[data_id] = Thread.new(filename, data_id) do |fname, did|
-        keywords = parse_tags(fname)
-        @data_mutex.synchronize { @data[did] = keywords }
-        @threads_mutex.synchronize { @threads.delete(did) }
-      end
-
-      data_id
+      new_work_async(:parse_tags, filename)
     end
 
     def get_data(data_id)
-      return unless @data_mutex.try_lock
+      @data_mutex.lock
       data = @data.delete(data_id)
       @data_mutex.unlock
       data
     end
 
+    def expire_data_async(data_id)
+      Thread.new(data_id) do |id|
+        @workers_mutex.lock
+        worker = @workers[id]
+        @workers_mutex.unlock
+        worker.join if worker
+        get_data(id)
+      end
+    end
+
     def stop
-      @threads_mutex.lock
-      threads = @threads.dup
-      @threads_mutex.unlock
-      threads.each { |t| t.join }
       DRb.stop_service
     end
 
-    def ready?
-      true
+    def pid
+      $$
     end
 
     private
+
+    def new_work_async(parse_method, content)
+      data_id = next_data_id
+
+      Thread.new(parse_method, content, data_id) do |m, c, id|
+        @workers_mutex.synchronize { @workers[id] = Thread.current }
+        keywords = send(m, c)
+        @data_mutex.synchronize { @data[id] = keywords }
+        @workers_mutex.synchronize { @workers.delete(id) }
+      end
+
+      data_id
+    end
 
     def next_data_id
       @data_id += 1
@@ -209,28 +223,36 @@ module Kompleter
       candidates.keys.sort { |a, b| candidates[b] <=> candidates[a] }
     end
 
-    def try_clean_unused(key)
-      return true unless repository[key].is_a?(Fixnum)
-      !data_server.get_data(repository[key]).nil?
+    def expire_data(key)
+      data_or_id = repository.delete(key)
+      data_server.expire_data_async(data_or_id) if data_or_id && data_or_id.is_a?(Fixnum)
     end
   end
 
   class BufferRepository < Repository
     def add(number, text)
-      return unless try_clean_unused(number)
-      repository[number] = ASYNC_MODE ? data_server.add_text_async(text) : parse_text(text)
+      repository[number] = if ASYNC_MODE
+        expire_data(number)
+        data_server.add_text_async(text)
+      else
+        parse_text(text)
+      end
     end
   end
 
   class TagsRepository < Repository
     def add(tags_file)
-      return unless try_clean_unused(tags_file)
-      repository[tags_file] = ASYNC_MODE ? data_server.add_tags_async(tags_file) : parse_tags(tags_file)
+      repository[tags_file] = if ASYNC_MODE
+        expire_data(tags_file)
+        data_server.add_tags_async(tags_file)
+      else
+        parse_tags(tags_file)
+      end
     end
   end
 
   class Kompleter
-    attr_reader :buffer_repository, :buffer_ticks, :tags_repository, :tags_mtimes, :data_server, :server_pid, :start_column, :real_start_column
+    attr_reader :buffer_repository, :buffer_ticks, :tags_repository, :tags_mtimes, :data_server, :start_column, :real_start_column
 
     def initialize
       @buffer_repository = BufferRepository.new(self)
@@ -240,8 +262,6 @@ module Kompleter
     end
 
     def process_current_buffer
-      return if ASYNC_MODE && !server_pid
-
       buffer = VIM::Buffer.current
       tick = VIM.evaluate("b:changedtick")
 
@@ -255,9 +275,12 @@ module Kompleter
       buffer_repository.add(buffer.number, buffer_text)
     end
 
-    def process_tagfiles
-      return if ASYNC_MODE && !server_pid
+    def expire_buffer(number)
+      buffer_repository.expire_data(number) if ASYNC_MODE
+      buffer_repository.repository.delete(number)
+    end
 
+    def process_tagfiles
       tag_files = VIM.evaluate("tagfiles()")
 
       tag_files.each do |file|
@@ -277,16 +300,15 @@ module Kompleter
     end
 
     def stop_data_server
-      return unless ASYNC_MODE && server_pid
-      pid = server_pid
-      @server_pid = nil
+      return unless ASYNC_MODE
+      pid = data_server.pid
       data_server.stop
       Process.wait(pid)
       DRb.stop_service
     end
 
     def start_data_server
-      return unless ASYNC_MODE && !server_pid
+      return unless ASYNC_MODE
       DRb.start_service
 
       tcp_server = TCPServer.new("127.0.0.1", 0)
@@ -301,13 +323,13 @@ module Kompleter
 
       @data_server = DRbObject.new_with_uri("druby://localhost:#{port}")
 
-      ticks = 0
+      tick = 0
 
       begin
         sleep 0.01
-        @server_pid = pid if @data_server.ready?
+        @data_server.pid  # just to verify the connection
       rescue DRb::DRbConnError
-        retry if (ticks += 1) < 500
+        retry if (tick += 1) < 500
 
         Process.kill("KILL", pid)
         Process.wait(pid)
@@ -323,8 +345,6 @@ module Kompleter
         VIM.command("echo '#{msg}'")
         VIM.command("echohl None")
       end
-
-      process_all
     end
 
     def find_start_column
