@@ -1,26 +1,33 @@
 vim-kompleter
 =============
 
-A smart keyword completion plugin for Vim.
+A smarter, faster, simpler and reliable keyword completion replacement for Vim.
+
+It differs from the standard keyword completion by extensive use of distance and frequency based
+algorithms used for keyword matching. Those algorithms were inspired by TextMate's keyword
+completion experiences.
+
 
 About
 -----
 
-This plugin requires a Vim with Ruby support compiled in. It provides fast, simple, smart, and
-reliable keyword completion. It differs from the standard keyword completion by extensive use of
-distance and frequency based algorithms for keyword matching. Those algorithms were inspired by
-TextMate's keyword completion behavior.
+The keyword completion is a feature available in Vim with `<C-n>` or `<C-p>` key bindings. `<C-n>`
+typically shows the completion window with identifiers parsed from the cursor till the end of file,
+combined with keywords from other sources (buffers, ctags, and so on). `<C-p>` - shows
+keyword from the cursor up to the very beginning of file similarly.
 
-Best results can be achived with the help of plugins like
-[SuperTab](https://github.com/ervandew/supertab). In case of
-[SuperTab](https://github.com/ervandew/supertab) all you have to do is to choose the user completion
-function as the default one:
+So, why the replacement? Vim-Kompleter (by _K_ just to precisely point out its connection with
+_keywords_) also shows you the keyword completions, but in a somewhat different way.
 
-    let g:SuperTabDefaultCompletionType = "<c-x><c-u>"
+First, it doesn't differentiate those two modes (before and after the cursor). Just `<C-x><C-u>` is
+enough - it's a standard trigger for the so-called user completion function. With the help of plugins
+like [SuperTab](https://github.com/ervandew/supertab) it would be actually just `<Tab>`. Upon this
+key combination, the plugin computes distances between cursor and keywords in the file. Then it
+combines the results with a keyword frequency factor. Next, it adds some most relevant keywords from
+buffers or ctags (the frequency considered too).
 
-Vim-Kompleter sets the user completion function to its own `kompleter#Complete`. Therefore it should
-work also with plugins like [AutoComplPop](http://www.vim.org/scripts/script.php?script_id=1879),
-though I didn't test that yet.
+Finally, the completion list is always keep short (max 10 items) and focused on most accurate
+results.
 
 
 Installation
@@ -30,27 +37,44 @@ In case of Pathogen, just clone the repo to your `bundles` directory:
 
     git clone https://github.com/szw/vim-kompleter.git
 
-If you prefer Vundle, add the following snippet to your `.vimrc` file:
+If you prefer Vundle, add the following snippet to your `.vimrc` file and perform `:BundleInstall`:
 
     Bundle "szw/vim-kompleter"
 
-Vim-Kompleter requires Ruby bindings to be present in your Vim. It has been tested with Ruby 1.8.7
-and 2.0.0 (both on Mac OSX) and seems working pretty well. I believe it will work with other
-configurations seamlessly too. In case of any problems create an issue please.
+In both cases you should restart Vim.
+
+Vim-Kompleter **requires** Ruby bindings to be compiled in your Vim. It has been tested with Ruby
+1.8.7 and 2.0.0 (both on Mac OSX) and seems working pretty well. And I believe it will work with
+other configurations seamlessly too. In case of any problems please create an issue.
+
+In my opinion, you reach the best experience with the help of plugins like
+[SuperTab](https://github.com/ervandew/supertab). In case of
+[SuperTab](https://github.com/ervandew/supertab) all you have to do is to set the user completion
+function as the default one:
+
+    let g:SuperTabDefaultCompletionType = "<c-x><c-u>"
+
+Of course, you can do it in many ways. You can combine the _user completion_ with omni-completion
+and so on. See SuperTab documentation for details [`:help
+supertab`](https://github.com/ervandew/supertab/blob/master/doc/supertab.txt)
+
+Vim-Kompleter sets the user completion function to its own `kompleter#Complete`. Therefore it should
+work also with plugins like [AutoComplPop](http://www.vim.org/scripts/script.php?script_id=1879),
+though I didn't test that yet.
 
 
 Forking
 -------
 
-Kompleter by default uses the "fork" feature to perform asynchronous tasks, which is unavailable
-on Windows or NetBSD4. In that case, or if you just want to disable asynchronous mode please set the
+Kompleter by default uses the "fork" feature to perform asynchronous tasks, which is unavailable on
+Windows or NetBSD4. In that case, or if you just want to disable asynchronous mode please set the
 following variable to `0` (by default it is `1`):
 
     let g:kompleter_async_mode = 0
 
 If asynchronous mode is disabled, the plugin may sometimes work less smoothly, however it depends
 heavily on the user system configuration and the concrete project. For example, without async mode
-it took a 1-2 seconds to parse a large tags file on Vim startup and it was a noticeable lag.
+it took a 1-2 seconds to parse a 30 MB tags file on Vim startup and it was a noticeable lag.
 
 
 #### Technical Note ####
@@ -60,8 +84,8 @@ in Vim Ruby threads just die unexpectedly and that leads to hard to catch failur
 Perhaps a Python implementation could handle threading a bit better (but it wouldn't work on ARM
 processors anyway).
 
-Right now Vim-Kompleter forks a process with a DRuby server which performs asynchronous tasks (parsing
-keywords). It actually seems pretty stable and very fast.
+Right now Vim-Kompleter forks a process with a DRuby server which performs asynchronous tasks
+(parsing keywords). Actually, this solution seems to be pretty stable and very fast.
 
 
 Case-Sensitive Completion
@@ -75,24 +99,28 @@ Vim-Kompleter provides three modes of case-sensitive completion:
 
 * smartcase (`2`)
 
-  In case you miss so-called _smartcase_ completion known from standard Vim completion algorithm.
+  In case you miss the _smartcase_ completion known from standard Vim completion algorithm.
   See `:help 'smartcase'` for more info.
 
-Smartcase is often used in Vim because it's handy while searching or substitute things. The same
-search engine settings are used for the standard Vim keyword completion algorithm. In this way
-you cannot just limit the `smartcase` option only to searching/substituting as command facility.
-It will also _enhance_ Vim's keyword matching and that is really frustrating. But if you used to
-work with smartcase, it's okay. You can enable it in Vim-Kompleter too:
+Smartcase is often used in Vim because it's handy while searching or substitute things.
+Unfortunately, the same search engine settings are used for the standard Vim keyword completion
+algorithm. Therefore you cannot just limit the `smartcase` option only to searching/substituting.
+Smartcase will also _enhance_ Vim's keyword matching and it's really annoying.
+
+By default Kompleter saves you from that headache. But if you used to work with smartcase while
+keyword completing, it's okay. You can enable the same in Vim-Kompleter too:
 
     let g:kompleter_case_sensitive = 2
 
-By default, the plain case sensitive completion is set (`let g:kompleter_case_sensitive = 1`).
+As said before, by default the plain case sensitive keyword matching is set (not the smartcase):
+
+    let g:kompleter_case_sensitive = 1
 
 
 Fuzzy Search
 ------------
 
-It looks like it's the next "must have" nowadays. However, chances are you won't like it very much,
+It looks like it's the next _must have_ nowadays. However, chances are you won't like it very much,
 because standard matching will provide you highly accurate results. But again, it strongly depends
 on your projects and your writing/coding habits as well. Fuzzy search (turned off by default) can be
 enabled like below:
@@ -107,7 +135,8 @@ Vim-Kompleter works with multibyte strings (even with Ruby 1.8.7). It can parse 
 keywords with Unicode characters, like _żaba_ (a frog in Polish) or _Gdańsk_ (a city name). If you
 have Vim compiled with Ruby 1.9 or greater it should even differentiate correctly upper and lower
 case characters. For example if you complete _ż_ you get candidates like _żaba_ but not _Żory_
-(another city). Ruby 1.8.7 is a bit dumb here, but anyways Unicode works quite nice, isn't it? :)
+(another city). Ruby 1.8.7 is a bit dumb with this, but anyways Unicode works even here and that's
+quite nice, isn't it? :)
 
 
 Self-Promotion
@@ -127,4 +156,4 @@ itself. See `:help license` for more details.
 Thanks to [Valloric](https://github.com/Valloric) and
 [YouCompleteMe](https://github.com/Valloric/YouCompleteMe) community for inspiration.
 
-Also thanks to [Gotar](https://github.com/gotar) for bugs catching :).
+Also big thanks to [Gotar](https://github.com/gotar) for bugs catching :).
