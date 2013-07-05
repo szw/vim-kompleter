@@ -49,8 +49,8 @@ other configurations seamlessly too. In case of any problems please create an is
 
 In my opinion, the best experiences you will have in a conjunction with plugins like
 [SuperTab](https://github.com/ervandew/supertab). In case of
-[SuperTab](https://github.com/ervandew/supertab) all you have to do is to set the user completion
-function as the default one:
+[SuperTab](https://github.com/ervandew/supertab) all you have to do is to make sure the user completion
+function is the default one:
 
     let g:SuperTabDefaultCompletionType = "<c-x><c-u>"
 
