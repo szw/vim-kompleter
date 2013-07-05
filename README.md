@@ -3,8 +3,8 @@ vim-kompleter
 
 A smarter, faster, simpler and reliable keyword completion replacement for Vim.
 
-It differs from the standard keyword completion by extensive use of distance and frequency based
-algorithms used for keyword matching. Those algorithms were inspired by TextMate's keyword
+It differs from the standard keyword completion by extensive usage of distance and frequency based
+algorithms to perform for keyword matching. Those algorithms were inspired by TextMate's keyword
 completion experiences.
 
 
@@ -14,7 +14,7 @@ About
 The keyword completion is a feature available in Vim with `<C-n>` or `<C-p>` key bindings. `<C-n>`
 typically shows the completion window with identifiers parsed from the cursor till the end of file,
 combined with keywords from other sources (buffers, ctags, and so on). `<C-p>` - shows
-keyword from the cursor up to the very beginning of file similarly.
+keywords from the cursor up to the very beginning of file similarly.
 
 So, why the replacement? Vim-Kompleter (by _K_ just to precisely point out its connection with
 _keywords_) also shows you the keyword completions, but in a somewhat different way.
