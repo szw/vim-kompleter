@@ -47,7 +47,7 @@ Vim-Kompleter **requires** Ruby bindings to be compiled in your Vim. It has been
 1.8.7 and 2.0.0 (both on Mac OSX) and seems working pretty well. And I believe it will work with
 other configurations seamlessly too. In case of any problems please create an issue.
 
-In my opinion, you reach the best experience with the help of plugins like
+In my opinion, the best experiences you will have in a conjunction with plugins like
 [SuperTab](https://github.com/ervandew/supertab). In case of
 [SuperTab](https://github.com/ervandew/supertab) all you have to do is to set the user completion
 function as the default one:
