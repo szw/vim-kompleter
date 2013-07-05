@@ -4,7 +4,7 @@ vim-kompleter
 A smarter, faster, simpler and reliable keyword completion replacement for Vim.
 
 It differs from the standard keyword completion by extensive usage of distance and frequency based
-algorithms to perform keyword matching. Those algorithms were inspired by TextMate's keyword
+algorithms to perform keyword matching. Those algorithms have been inspired by TextMate's keyword
 completion experiences.
 
 
