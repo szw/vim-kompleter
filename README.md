@@ -24,7 +24,7 @@ enough - it's a standard trigger for the so-called user completion function. Wit
 like [SuperTab](https://github.com/ervandew/supertab) it would be actually just `<Tab>`. Upon this
 key combination, the plugin computes distances between cursor and keywords in the file. Then it
 combines the results with a keyword frequency factor. Next, it adds some most relevant keywords from
-buffers or ctags (the frequency considered too).
+buffers or ctags (the frequency is considered too).
 
 Finally, the completion list is always keep short (max 10 items) and focused on most accurate
 results.
