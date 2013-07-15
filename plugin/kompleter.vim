@@ -66,7 +66,7 @@ endfun
 
 fun! s:startup()
   au BufEnter,BufRead * call s:prepare_buffer()
-  au CursorHold * call s:process_keywords()
+  au CursorHold,InsertLeave * call s:process_keywords()
   au BufUnload * call s:expire_buffer(expand('<abuf>'))
   ruby KOMPLETER.start_data_server
   call s:prepare_buffer()
