@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.1.2
+" Version:      0.1.3
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -85,9 +85,18 @@ require "drb/drb"
 require "pathname"
 
 if RUBY_VERSION.to_f < 1.9
+  require 'iconv'
+
   class String
     def byte_length
       length
+    end
+
+    def try_repair_utf8
+      ic = Iconv.new('UTF-8', 'UTF-8//IGNORE')
+      ic.iconv(self)
+    rescue
+      self
     end
   end
 else
@@ -95,6 +104,19 @@ else
     def byte_length
       bytes.to_a.count
     end
+
+    def try_repair_utf8
+      content = encode('UTF-16', 'UTF-8', :invalid => :replace, :replace => '')
+      content.encode('UTF-8', 'UTF-16')
+    rescue
+      self
+    end
+  end
+end
+
+class String
+  def try_repair_utf8!
+    replace(try_repair_utf8)
   end
 end
 
@@ -115,7 +137,20 @@ module Kompleter
       keywords = Hash.new(0)
 
       File.open(Pathname.new(filename).realpath).each_line do |line|
-        match = TAG_REGEX.match(line)
+        attepted_to_repair = false
+
+        begin
+          match = TAG_REGEX.match(line)
+        rescue
+          if attepted_to_repair
+            next # repair was unsuccessfull (usually Iconv with Ruby 1.8.7), just skip this corrupted line
+          else
+            line.try_repair_utf8!
+            attepted_to_repair = true
+            retry
+          end
+        end
+
         keywords[match[1]] += 1 if match && match[1].length >= MIN_KEYWORD_SIZE
       end
 
