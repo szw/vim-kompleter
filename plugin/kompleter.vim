@@ -99,7 +99,7 @@ if RUBY_VERSION.to_f < 1.9
       self
     end
 
-    def chunks(size = TEXT_CHUNK_SIZE)
+    def chunks(size)
       chars.each_slice(size).map { |chars| chars.join }
     end
   end
@@ -116,8 +116,8 @@ else
       self
     end
 
-    def chunks(size = TEXT_CHUNK_SIZE)
-      scan(/.{1, #{size}}/m)
+    def chunks(size)
+      scan(/.{1,#{size}}/m)
     end
   end
 end
@@ -132,7 +132,7 @@ module Kompleter
   MIN_KEYWORD_SIZE = 3
   MAX_COMPLETIONS = 10
   DISTANCE_RANGE = 5000
-  TEXT_CHUNK_SIZE = 100_000
+  MAX_CHUNK_SIZE = 100_000
 
   TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/u
   KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\w]+/u : /[_[:alnum:]]+/u
@@ -288,8 +288,8 @@ module Kompleter
     def add(number, text)
       repository[number] = if ASYNC_MODE
         expire_data(number)
-        if text.length > TEXT_CHUNK_SIZE
-          chunks = text.chunks
+        if text.length > MAX_CHUNK_SIZE
+          chunks = text.chunks(MAX_CHUNK_SIZE)
           chunked_text_id = data_server.add_chunked_text(chunks[0])
           chunks[1, chunks.size].each { |chunk| data_server.add_chunked_text(chunk, chunked_text_id) }
           data_server.process_chunks_async(chunked_text_id)
