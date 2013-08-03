@@ -98,6 +98,10 @@ if RUBY_VERSION.to_f < 1.9
     rescue
       self
     end
+
+    def chunks(size = TEXT_CHUNK_SIZE)
+      chars.each_slice(size).map { |chars| chars.join }
+    end
   end
 else
   class String
@@ -110,6 +114,10 @@ else
       content.encode('UTF-8', 'UTF-16')
     rescue
       self
+    end
+
+    def chunks(size = TEXT_CHUNK_SIZE)
+      scan(/.{1, #{size}}/m)
     end
   end
 end
@@ -281,7 +289,7 @@ module Kompleter
       repository[number] = if ASYNC_MODE
         expire_data(number)
         if text.length > TEXT_CHUNK_SIZE
-          chunks = (RUBY_VERSION.to_f < 1.9) ? text.chars.each_slice(TEXT_CHUNK_SIZE).map { |chars| chars.join } : text.scan(/.{1,#{TEXT_CHUNK_SIZE}}/m)
+          chunks = text.chunks
           chunked_text_id = data_server.add_chunked_text(chunks[0])
           chunks[1, chunks.size].each { |chunk| data_server.add_chunked_text(chunk, chunked_text_id) }
           data_server.process_chunks_async(chunked_text_id)
