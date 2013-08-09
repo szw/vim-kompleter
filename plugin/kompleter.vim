@@ -363,8 +363,8 @@ module Kompleter
 
     def stop_data_server
       return unless ASYNC_MODE
-      pid = data_server.pid
-      data_server.stop
+      pid = @data_server.pid
+      @data_server.stop
       Process.wait(pid)
       DRb.stop_service
     end
