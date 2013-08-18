@@ -139,6 +139,20 @@ case characters. For example if you complete _ż_ you get candidates like _żaba
 quite nice, isn't it? :)
 
 
+Lispy Identifiers
+-----------------
+
+Lispy identifiers are just keywords with a hyphen allowed inside. Normally you can enable them by
+setting `:set lisp`. They are common not only in Lisp but also in a bunch of web interface
+languages, like HTML or CSS.
+
+You can provide the Lispy filetypes by setting a string with filetypes separated by commas, like here:
+
+    let g:kompleter_lispy_filetypes = "lisp,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee"
+
+By default it is set as above. See `:help lisp` for more details of Vim Lisp support.
+
+
 Self-Promotion
 --------------
 

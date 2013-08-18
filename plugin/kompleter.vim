@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.1.3
+" Version:      0.1.4
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -27,28 +27,32 @@ endif
 
 let g:loaded_kompleter = 1
 
-if !exists('g:kompleter_fuzzy_search')
+if !exists("g:kompleter_fuzzy_search")
   let g:kompleter_fuzzy_search = 0
 endif
 
 " Set to 0 disable asynchronous mode (using forking).
-if !exists('g:kompleter_async_mode')
+if !exists("g:kompleter_async_mode")
   let g:kompleter_async_mode = 1
 endif
 
 " 0 - case insensitive
 " 1 - case sensitive
 " 2 - smart case sensitive (see :help 'smartcase')
-if !exists('g:kompleter_case_sensitive')
+if !exists("g:kompleter_case_sensitive")
   let g:kompleter_case_sensitive = 1
+endif
+
+if !exists("g:kompleter_lispy_filetypes")
+  let g:kompleter_lispy_filetypes = "lisp,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee"
 endif
 
 au VimEnter * call s:startup()
 au VimLeave * call s:cleanup()
 
 fun! s:prepare_buffer()
-  let &completefunc = 'kompleter#Complete'
-  let &l:completefunc = 'kompleter#Complete'
+  let &completefunc = "kompleter#Complete"
+  let &l:completefunc = "kompleter#Complete"
   call s:process_keywords()
 endfun
 
@@ -136,6 +140,9 @@ module Kompleter
 
   TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/u
   KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\w]+/u : /[_[:alnum:]]+/u
+  LISPY_KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\-\w]+/u : /[\-_[:alnum:]]+/u
+
+  LISPY_FILETYPES = VIM.evaluate("g:kompleter_lispy_filetypes").split(",").map { |filetype| filetype.strip }
 
   FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
   CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
@@ -166,9 +173,9 @@ module Kompleter
       keywords
     end
 
-    def parse_text(text)
+    def parse_text(text, keyword_regex)
       keywords = Hash.new(0)
-      text.scan(KEYWORD_REGEX).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
+      text.scan(keyword_regex).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
       keywords
     end
   end
@@ -190,17 +197,17 @@ module Kompleter
       chunked_text_id
     end
 
-    def process_chunks_async(chunked_text_id)
+    def process_chunks_async(chunked_text_id, keyword_regex)
       text = @chunks.delete(chunked_text_id)
-      add_text_async(text)
+      add_text_async(text, keyword_regex)
     end
 
-    def add_text_async(text)
-      new_work_async(:parse_text, text)
+    def add_text_async(text, keyword_regex)
+      new_work_async(:parse_text, [text, keyword_regex])
     end
 
     def add_tags_async(filename)
-      new_work_async(:parse_tags, filename)
+      new_work_async(:parse_tags, [filename])
     end
 
     def get_data(data_id)
@@ -235,7 +242,7 @@ module Kompleter
 
       Thread.new(parse_method, content, data_id) do |m, c, id|
         @workers_mutex.synchronize { @workers[id] = Thread.current }
-        keywords = send(m, c)
+        keywords = send(m, *c)
         @data_mutex.synchronize { @data[id] = keywords }
         @workers_mutex.synchronize { @workers.delete(id) }
       end
@@ -285,19 +292,19 @@ module Kompleter
   end
 
   class BufferRepository < Repository
-    def add(number, text)
+    def add(number, keyword_regex, text)
       repository[number] = if ASYNC_MODE
         expire_data(number)
         if text.length > MAX_CHUNK_SIZE
           chunks = text.chunks(MAX_CHUNK_SIZE)
           chunked_text_id = data_server.add_chunked_text(chunks[0])
           chunks[1, chunks.size].each { |chunk| data_server.add_chunked_text(chunk, chunked_text_id) }
-          data_server.process_chunks_async(chunked_text_id)
+          data_server.process_chunks_async(chunked_text_id, keyword_regex)
         else
-          data_server.add_text_async(text)
+          data_server.add_text_async(text, keyword_regex)
         end
       else
-        parse_text(text)
+        parse_text(text, keyword_regex)
       end
     end
   end
@@ -314,7 +321,7 @@ module Kompleter
   end
 
   class Kompleter
-    attr_reader :buffer_repository, :buffer_ticks, :tags_repository, :tags_mtimes, :data_server, :start_column, :real_start_column
+    attr_reader :buffer_repository, :buffer_ticks, :tags_repository, :tags_mtimes, :data_server, :start_column, :real_start_column, :keyword_regex
 
     def initialize
       @buffer_repository = BufferRepository.new(self)
@@ -334,7 +341,7 @@ module Kompleter
 
       (1..buffer.count).each { |n| buffer_text << "#{buffer[n]}\n" }
 
-      buffer_repository.add(buffer.number, buffer_text)
+      buffer_repository.add(buffer.number, current_keyword_regex, buffer_text)
     end
 
     def expire_buffer(number)
@@ -409,7 +416,12 @@ module Kompleter
       end
     end
 
+    def current_keyword_regex
+      LISPY_FILETYPES.include?(VIM.evaluate("&ft")) ? LISPY_KEYWORD_REGEX : KEYWORD_REGEX
+    end
+
     def find_start_column
+      @keyword_regex = current_keyword_regex
       start_column = VIM::Window.current.cursor[1]
       line = VIM::Buffer.current.line.split(//u)
       counter = 0
@@ -421,7 +433,7 @@ module Kompleter
         real_start_column += 1
       end
 
-      while (start_column > 0) && (real_start_column > 0) && ((line[real_start_column - 1] =~ KEYWORD_REGEX) == 0)
+      while (start_column > 0) && (real_start_column > 0) && ((line[real_start_column - 1] =~ keyword_regex) == 0)
         real_start_column -= 1
         start_column -= line[real_start_column].byte_length
       end
@@ -461,7 +473,7 @@ module Kompleter
       keywords = Hash.new { |hash, key| hash[key] = Array.new }
       count = 0
 
-      text.to_enum(:scan, KEYWORD_REGEX).each do |m|
+      text.to_enum(:scan, keyword_regex).each do |m|
         if m.length >= MIN_KEYWORD_SIZE
           keywords[m] << $`.size
           count += 1
