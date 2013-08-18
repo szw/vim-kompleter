@@ -151,9 +151,9 @@ You can provide the Lispy filetypes by setting a string with filetypes separated
     let g:kompleter_lispy_filetypes = "lisp,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee"
 
 By default it is set as above. See `:help lisp` for more details of Vim Lisp support. Moreover, see
-`help iskeyword` find out more info about how Vim recognizes keywords in various commands like `*`
-or `#`. Particularly, you might want to add a dash for filetypes considered _lispy_ by Kompleter (in
-your `.vimrc`):
+`:help iskeyword` or `:help isk` to find out how Vim recognizes keywords in various commands like
+`*` or `#`. Particularly, you might want to add a dash to `isk` for filetypes considered _lispy_ by
+Kompleter (in your `.vimrc`):
 
     " Lispy identifiers support
     au FileType lisp,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee setlocal isk+=-
