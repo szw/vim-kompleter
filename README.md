@@ -142,22 +142,20 @@ quite nice, isn't it? :)
 Lispy Identifiers
 -----------------
 
-Lispy identifiers are just keywords with a dash (`-`) allowed inside. Normally you can enable them by
-setting `:set lisp`. They are common not only in Lisp but also in a bunch of web interface
-languages, like HTML or CSS.
+Lispy identifiers are just keywords with a hyphen allowed inside. Such keywords are common not only
+in Lisp family but also in a bunch of web interface languages, like HTML or CSS. Normally, in Vim,
+you can enable them by adjusting `:set iskeyword` option to contain the dash char `-` or setting the
+_lisp_ option (`:set lisp`). Vim-Kompleter will recognize that and allows the dash in identifiers
+too.
 
-You can provide the Lispy filetypes by setting a string with filetypes separated by commas, like here:
-
-    let g:kompleter_lispy_filetypes = "lisp,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee"
-
-By default it is set as above. See `:help lisp` for more details of Vim Lisp support. Moreover, see
-`:help iskeyword` or `:help isk` to find out how Vim recognizes keywords in various commands like
-`*` or `#`. Particularly, you might want to add a dash to `isk` for filetypes considered _lispy_ by
-Kompleter (in your `.vimrc`):
+You can provide the Lispy identifiers for certain filetypes permanently in your `.vimrc` by adding
+a dash to the `isk` option like here:
 
     " Lispy identifiers support
-    au FileType lisp,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee setlocal isk+=-
+    au FileType lisp,clojure,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee setlocal isk+=-
 
+See `:help iskeyword` or `:help isk` to find out how Vim recognizes keywords in various commands like
+`*` or `#`. Moreover, see `:help lisp` for more details of Vim Lisp support.
 
 Self-Promotion
 --------------

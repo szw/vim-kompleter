@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.1.4
+" Version:      0.1.5
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -41,10 +41,6 @@ endif
 " 2 - smart case sensitive (see :help 'smartcase')
 if !exists("g:kompleter_case_sensitive")
   let g:kompleter_case_sensitive = 1
-endif
-
-if !exists("g:kompleter_lispy_filetypes")
-  let g:kompleter_lispy_filetypes = "lisp,html,xml,xhtml,haml,eruby,css,scss,sass,javascript,coffee"
 endif
 
 au VimEnter * call s:startup()
@@ -140,9 +136,7 @@ module Kompleter
 
   TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/u
   KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\w]+/u : /[_[:alnum:]]+/u
-  LISPY_KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\-\w]+/u : /[\-_[:alnum:]]+/u
-
-  LISPY_FILETYPES = VIM.evaluate("g:kompleter_lispy_filetypes").split(",").map { |filetype| filetype.strip }
+  DASH_KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\-\w]+/u : /[\-_[:alnum:]]+/u
 
   FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
   CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
@@ -417,7 +411,7 @@ module Kompleter
     end
 
     def current_keyword_regex
-      LISPY_FILETYPES.include?(VIM.evaluate("&ft")) ? LISPY_KEYWORD_REGEX : KEYWORD_REGEX
+      VIM.evaluate("&isk").split(",").map { |filetype| filetype.strip }.include?("-") || (VIM.evaluate("&lisp") == 1) ? DASH_KEYWORD_REGEX : KEYWORD_REGEX
     end
 
     def find_start_column
