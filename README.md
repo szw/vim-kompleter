@@ -142,7 +142,7 @@ quite nice, isn't it? :)
 Lispy Identifiers
 -----------------
 
-Lispy identifiers are just keywords with a hyphen allowed inside. Normally you can enable them by
+Lispy identifiers are just keywords with a dash (`-`) allowed inside. Normally you can enable them by
 setting `:set lisp`. They are common not only in Lisp but also in a bunch of web interface
 languages, like HTML or CSS.
 
