@@ -368,6 +368,8 @@ module Kompleter
       data_server.stop
       Process.wait(pid)
       DRb.stop_service
+    rescue
+      nil
     end
 
     def start_data_server
