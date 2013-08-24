@@ -43,6 +43,15 @@ if !exists("g:kompleter_case_sensitive")
   let g:kompleter_case_sensitive = 1
 endif
 
+if !exists("g:kompleter_replace_standard_mappings")
+  let g:kompleter_replace_standard_mappings = 1
+endif
+
+if g:kompleter_replace_standard_mappings
+  inoremap <C-p> <C-x><C-u><C-p><C-p>
+  inoremap <C-n> <C-x><C-u>
+endif
+
 au VimEnter * call s:startup()
 au VimLeave * call s:cleanup()
 

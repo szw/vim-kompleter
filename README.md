@@ -20,11 +20,15 @@ So, why the replacement? Vim-Kompleter (by _K_ just to precisely point out its c
 _keywords_) also shows you the keyword completions, but in a somewhat different way.
 
 First, it doesn't differentiate those two modes (before and after the cursor). Just `<C-x><C-u>` is
-enough - it's a standard trigger for the so-called user completion function. With the help of plugins
-like [SuperTab](https://github.com/ervandew/supertab) it would be actually just `<Tab>`. Upon this
-key combination, the plugin computes distances between cursor and keywords in the file. Then it
-combines the results with a keyword frequency factor. Next, it adds some most relevant keywords from
-buffers or ctags (the frequency is considered too).
+enough - it's a standard trigger for the so-called user completion function. By default,
+Vim-Kompleter replaces standard keyword completion triggers (`<C-n>` and `<C-p>`) with proper
+`<C-x><C-u>` calls. Otherwise, with the help of plugins like
+[SuperTab](https://github.com/ervandew/supertab) you can use just `<Tab>`, `<S-Tab>` key
+combinations.
+
+On each key press of the given combination, the plugin computes distances between cursor and
+keywords in the file. Then it combines the results with a keyword frequency factor. Next, it adds
+some most relevant keywords from buffers or ctags (the frequency is considered too).
 
 Finally, the completion list is always keep short (max 10 items) and focused on most accurate
 results.
@@ -47,10 +51,14 @@ Vim-Kompleter **requires** Ruby bindings to be compiled in your Vim. It has been
 1.8.7 and 2.0.0 (both on Mac OSX) and seems working pretty well. And I believe it will work with
 other configurations seamlessly too. In case of any problems please create an issue.
 
-In my opinion, the best experiences you will have in a conjunction with plugins like
-[SuperTab](https://github.com/ervandew/supertab). In case of
-[SuperTab](https://github.com/ervandew/supertab) all you have to do is to make sure the user completion
-function is the default one:
+By default, Vim-Kompleter replaces default keyword completion triggers (`<C-n>`, `<C-p>`). If you
+want to keep original Vim keyword completion mappings set `g:kompleter_replace_standard_mappings` to
+0:
+
+    let g:kompleter_replace_standard_mappings = 0
+
+On the other hand, you might try plugins like [SuperTab](https://github.com/ervandew/supertab). In
+such case all you have to do is to make sure the user completion function is the default one:
 
     let g:SuperTabDefaultCompletionType = "<c-x><c-u>"
 
@@ -156,6 +164,7 @@ a dash to the `isk` option like here:
 
 See `:help iskeyword` or `:help isk` to find out how Vim recognizes keywords in various commands like
 `*` or `#`. Moreover, see `:help lisp` for more details of Vim Lisp support.
+
 
 Self-Promotion
 --------------
