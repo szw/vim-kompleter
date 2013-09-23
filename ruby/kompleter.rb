@@ -82,6 +82,17 @@ module Kompleter
       keywords
     end
 
+    def parse_dict(filename)
+      keywords = Hash.new(0)
+
+      File.open(Pathname.new(filename).realpath).each_line do |line|
+        line.chop!
+        keywords[line] += 1 if line.length >= MIN_KEYWORD_SIZE
+      end
+
+      keywords
+    end
+
     def parse_text(text, keyword_regex)
       keywords = Hash.new(0)
       text.scan(keyword_regex).each { |keyword| keywords[keyword] += 1 if keyword.length >= MIN_KEYWORD_SIZE }
@@ -117,6 +128,10 @@ module Kompleter
 
     def add_tags_async(filename)
       new_work_async(:parse_tags, [filename])
+    end
+
+    def add_dict_async(filename)
+      new_work_async(:parse_dict, [filename])
     end
 
     def get_data(data_id)
@@ -232,16 +247,29 @@ module Kompleter
     end
   end
 
+  class DictRepository < Repository
+    def add(dict_file)
+      repository[dict_file] = if ASYNC_MODE
+        expire_data(dict_file)
+        data_server.add_dict_async(dict_file)
+      else
+        parse_dict(dict_file)
+      end
+    end
+  end
+
   class Kompleter
-    attr_reader :buffer_repository, :buffer_ticks, :tags_repository,
+    attr_reader :buffer_repository, :buffer_ticks, :tags_repository, :dict_repository,
                 :tags_mtimes, :data_server, :start_column, :real_start_column,
-                :keyword_regex
+                :keyword_regex, :dictionaries
 
     def initialize
       @buffer_repository = BufferRepository.new(self)
       @buffer_ticks = {}
       @tags_repository = TagsRepository.new(self)
       @tags_mtimes = Hash.new(0)
+      @dict_repository = DictRepository.new(self)
+      @dictionaries = []
     end
 
     def process_current_buffer
@@ -277,9 +305,19 @@ module Kompleter
       end
     end
 
+    def process_dictionaries
+      Dir.glob(VIM.evaluate("&dict")).each do |file|
+        unless dictionaries.include?(file)
+          dict_repository.add(file)
+          dictionaries << file
+        end
+      end
+    end
+
     def process_all
       process_current_buffer
       process_tagfiles
+      process_dictionaries
     end
 
     def stop_data_server
@@ -385,6 +423,8 @@ module Kompleter
           break if complete_from_buffers(query, candidates)
         when "t"
           break if complete_from_tags(query, candidates)
+        when "k"
+          break if complete_from_dictionaries(query, candidates)
         else
           next
         end
@@ -472,6 +512,10 @@ module Kompleter
 
     def complete_from_tags(query, candidates)
       fill_candidates(tags_repository.lookup(query), candidates)
+    end
+
+    def complete_from_dictionaries(query, candidates)
+      fill_candidates(dict_repository.lookup(query), candidates)
     end
   end
 end

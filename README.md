@@ -33,7 +33,6 @@ some most relevant keywords from buffers or ctags (the frequency is considered t
 Finally, the completion list is always keep short (max 10 items) and focused on most accurate
 results.
 
-
 Installation
 ------------
 
@@ -154,6 +153,18 @@ a dash to the `isk` option like here:
 See `:help iskeyword` or `:help isk` to find out how Vim recognizes keywords in various commands like
 `*` or `#`. Moreover, see `:help lisp` for more details of Vim Lisp support.
 
+
+Completions order
+-----------------
+
+Kompleter follows the precedence of completion methods defined in the `'complete'` option. It
+understands: `'.'` (the current file), `'w'` (open windows and [F2's](https://github.com/szw/vim-f2)
+current tab buffers), `'b'` (all loaded buffers), `'t'` (tags), and `'k'` (dictionaries). 
+
+Vim-Kompleter can handle custom dictionary completions. You can specify them with the Vim
+`'dictionary'` option. Then if you add the dictionary completion to be included in the keyword
+completion (via `:set complete += k`) Kompleter will add words from dictionaries. See 
+`help 'dictionary'` and `:help 'complete'` for more information.
 
 Self-Promotion
 --------------
