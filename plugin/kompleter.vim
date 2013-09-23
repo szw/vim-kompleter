@@ -1,6 +1,6 @@
 " vim-kompleter - Smart keyword completion for Vim
 " Maintainer:   Szymon Wrozynski
-" Version:      0.1.6
+" Version:      0.1.7
 "
 " Installation:
 " Place in ~/.vim/plugin/kompleter.vim or in case of Pathogen:
@@ -26,10 +26,6 @@ if exists("g:loaded_kompleter") || &cp || v:version < 700 || !has("ruby")
 endif
 
 let g:loaded_kompleter = 1
-
-if !exists("g:kompleter_fuzzy_search")
-  let g:kompleter_fuzzy_search = 0
-endif
 
 " Set to 0 disable asynchronous mode (using forking).
 if !exists("g:kompleter_async_mode")

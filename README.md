@@ -125,17 +125,6 @@ As said before, by default the plain case sensitive keyword matching is set (not
     let g:kompleter_case_sensitive = 1
 
 
-Fuzzy Search
-------------
-
-It looks like it's the next _must have_ nowadays. However, chances are you won't like it very much,
-because standard matching will provide you highly accurate results. But again, it strongly depends
-on your projects and your writing/coding habits as well. Fuzzy search (turned off by default) can be
-enabled like below:
-
-    let g:kompleter_fuzzy_search = 1
-
-
 Unicode Support
 ---------------
 

@@ -54,7 +54,6 @@ module Kompleter
   KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\w]+/u : /[_[:alnum:]]+/u
   DASH_KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\-\w]+/u : /[\-_[:alnum:]]+/u
 
-  FUZZY_SEARCH = VIM.evaluate("g:kompleter_fuzzy_search")
   CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
   ASYNC_MODE = VIM.evaluate("g:kompleter_async_mode") != 0
 
@@ -371,7 +370,6 @@ module Kompleter
 
       if query.length > 0
         case_sensitive = (CASE_SENSITIVE == 2) ? !(query =~ /[[:upper:]]+/u).nil? : (CASE_SENSITIVE > 0)
-        query = query.split(//u).join(".*?") if FUZZY_SEARCH > 0
         query = case_sensitive ? /^#{query}/u : /^#{query}/ui
       else
         query = nil
