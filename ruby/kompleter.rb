@@ -308,8 +308,8 @@ module Kompleter
     def process_dictionaries
       Dir.glob(VIM.evaluate("&dict")).each do |file|
         next if dictionaries.include?(file)
-        dict_repository.add(file)
         dictionaries << file
+        dict_repository.add(file)
       end
     end
 
