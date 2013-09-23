@@ -164,7 +164,7 @@ current tab buffers), `'b'` (all loaded buffers), `'t'` (tags), and `'k'` (dicti
 Vim-Kompleter can handle custom dictionary completions. You can specify them with the Vim
 `'dictionary'` option. Then if you add the dictionary completion to be included in the keyword
 completion (via `:set complete += k`) Kompleter will add words from dictionaries. See 
-`help 'dictionary'` and `:help 'complete'` for more information.
+`:help 'dictionary'` and `:help 'complete'` for more information.
 
 Self-Promotion
 --------------
