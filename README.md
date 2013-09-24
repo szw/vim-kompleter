@@ -7,7 +7,7 @@ It differs from the standard keyword completion by extensive usage of distance a
 algorithms in order to perform keyword matching. Those algorithms are inspired by TextMate's keyword
 completion experiences.
 
-It is written with _K_ to emphasize its new approach to _keywords_ completion.
+It is written with _K_ to emphasize its new approach to _keyword_ completion.
 
 
 About
