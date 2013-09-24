@@ -1,7 +1,7 @@
 require "drb/drb"
 
 if RUBY_VERSION.to_f < 1.9
-  require 'iconv'
+  require "iconv"
 
   class String
     def byte_length
@@ -9,7 +9,7 @@ if RUBY_VERSION.to_f < 1.9
     end
 
     def try_repair_utf8
-      ic = Iconv.new('UTF-8', 'UTF-8//IGNORE')
+      ic = Iconv.new("UTF-8", "UTF-8//IGNORE")
       ic.iconv(self)
     rescue
       self
@@ -26,8 +26,8 @@ else
     end
 
     def try_repair_utf8
-      content = encode('UTF-16', 'UTF-8', :invalid => :replace, :replace => '')
-      content.encode('UTF-8', 'UTF-16')
+      content = encode("UTF-16", "UTF-8", :invalid => :replace, :replace => "")
+      content.encode("UTF-8", "UTF-16")
     rescue
       self
     end
@@ -45,17 +45,17 @@ class String
 end
 
 module Kompleter
-  MIN_KEYWORD_SIZE = 3
-  MAX_COMPLETIONS = 10
-  DISTANCE_RANGE = 5000
-  MAX_CHUNK_SIZE = 100_000
+  MIN_KEYWORD_SIZE   = 3
+  MAX_COMPLETIONS    = 10
+  DISTANCE_RANGE     = 5000
+  MAX_CHUNK_SIZE     = 100_000
 
-  TAG_REGEX = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/u
-  KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\w]+/u : /[_[:alnum:]]+/u
+  TAG_REGEX          = /^([^\t\n\r]+)\t([^\t\n\r]+)\t.*?language:([^\t\n\r]+).*?$/u
+  KEYWORD_REGEX      = (RUBY_VERSION.to_f < 1.9) ? /[\w]+/u : /[_[:alnum:]]+/u
   DASH_KEYWORD_REGEX = (RUBY_VERSION.to_f < 1.9) ? /[\-\w]+/u : /[\-_[:alnum:]]+/u
 
-  CASE_SENSITIVE = VIM.evaluate("g:kompleter_case_sensitive")
-  ASYNC_MODE = VIM.evaluate("g:kompleter_async_mode") != 0
+  CASE_SENSITIVE     = VIM.evaluate("g:kompleter_case_sensitive")
+  ASYNC_MODE         = VIM.evaluate("g:kompleter_async_mode") != 0
 
   module KeywordParser
     def parse_tags(filename)
@@ -104,12 +104,12 @@ module Kompleter
     include KeywordParser
 
     def initialize
-      @data_id = 0
-      @data = {}
-      @workers = {}
-      @data_mutex = Mutex.new
+      @data_id       = 0
+      @data          = {}
+      @workers       = {}
+      @data_mutex    = Mutex.new
       @workers_mutex = Mutex.new
-      @chunks = Hash.new { |hash, key| hash[key] = String.new }
+      @chunks        = Hash.new { |hash, key| hash[key] = String.new }
     end
 
     def add_chunked_text(chunk, chunked_text_id = next_data_id)
@@ -185,7 +185,7 @@ module Kompleter
     attr_reader :repository
 
     def initialize(kompleter)
-      @kompleter = kompleter
+      @kompleter  = kompleter
       @repository = {}
     end
 
@@ -223,8 +223,9 @@ module Kompleter
       repository[number] = if ASYNC_MODE
         expire_data(number)
         if text.length > MAX_CHUNK_SIZE
-          chunks = text.chunks(MAX_CHUNK_SIZE)
+          chunks          = text.chunks(MAX_CHUNK_SIZE)
           chunked_text_id = data_server.add_chunked_text(chunks[0])
+
           chunks[1, chunks.size].each { |chunk| data_server.add_chunked_text(chunk, chunked_text_id) }
           data_server.process_chunks_async(chunked_text_id, keyword_regex)
         else
@@ -265,16 +266,16 @@ module Kompleter
 
     def initialize
       @buffer_repository = BufferRepository.new(self)
-      @buffer_ticks = {}
-      @tags_repository = TagsRepository.new(self)
-      @tags_mtimes = Hash.new(0)
-      @dict_repository = DictRepository.new(self)
-      @dictionaries = []
+      @buffer_ticks      = {}
+      @tags_repository   = TagsRepository.new(self)
+      @tags_mtimes       = Hash.new(0)
+      @dict_repository   = DictRepository.new(self)
+      @dictionaries      = []
     end
 
     def process_current_buffer
       buffer = VIM::Buffer.current
-      tick = VIM.evaluate("b:changedtick")
+      tick   = VIM.evaluate("b:changedtick")
 
       return if buffer_ticks[buffer.number] == tick
 
@@ -333,7 +334,8 @@ module Kompleter
       DRb.start_service
 
       tcp_server = TCPServer.new("127.0.0.1", 0)
-      port = tcp_server.addr[1]
+      port       = tcp_server.addr[1]
+
       tcp_server.close
 
       pid = fork do
@@ -377,10 +379,10 @@ module Kompleter
     end
 
     def find_start_column
-      @keyword_regex = current_keyword_regex
-      start_column = VIM::Window.current.cursor[1]
-      line = VIM::Buffer.current.line.split(//u)
-      counter = 0
+      @keyword_regex    = current_keyword_regex
+      start_column      = VIM::Window.current.cursor[1]
+      line              = VIM::Buffer.current.line.split(//u)
+      counter           = 0
       real_start_column = 0
 
       line.each do |letter|
@@ -395,7 +397,7 @@ module Kompleter
       end
 
       @real_start_column = real_start_column
-      @start_column = start_column
+      @start_column      = start_column
     end
 
     def complete(query)
@@ -434,11 +436,11 @@ module Kompleter
 
     def complete_from_current(query, candidates)
       buffer = VIM::Buffer.current
-      row = VIM::Window.current.cursor[0]
+      row    = VIM::Window.current.cursor[0]
       column = (RUBY_VERSION.to_f < 1.9) ? start_column : real_start_column
 
       cursor = 0
-      text = ""
+      text   = ""
 
       (1..buffer.count).each do |n|
         line = "#{buffer[n]}\n"
@@ -461,7 +463,7 @@ module Kompleter
       end
 
       keywords = Hash.new { |hash, key| hash[key] = Array.new }
-      count = 0
+      count    = 0
 
       text.to_enum(:scan, keyword_regex).each do |m|
         if m.length >= MIN_KEYWORD_SIZE
