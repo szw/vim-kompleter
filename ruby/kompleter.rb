@@ -296,6 +296,7 @@ module Kompleter
       tag_files = VIM.evaluate("tagfiles()")
 
       tag_files.each do |file|
+        file = File.expand_path(file)
         if File.exists?(file)
           mtime = File.mtime(file).to_i
           if tags_mtimes[file] < mtime
