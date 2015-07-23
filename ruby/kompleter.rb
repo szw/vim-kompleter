@@ -498,6 +498,8 @@ module Kompleter
     def complete_from_windows(query, candidates)
       current_tab_buffers = if VIM.evaluate("exists('g:ctrlspace_loaded') && g:ctrlspace_loaded") == 1
                               VIM.evaluate("keys(ctrlspace#buffers(tabpagenr()))").map { |n| n.to_i }
+                            elsif VIM.evaluate("exists('g:CtrlSpaceLoaded') && g:CtrlSpaceLoaded") == 1
+                              VIM.evaluate("keys(ctrlspace#buffers#Buffers(tabpagenr()))").map { |n| n.to_i }
                             else
                               VIM.evaluate("tabpagebuflist(tabpagenr())")
                             end
